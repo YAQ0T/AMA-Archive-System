@@ -21,12 +21,6 @@ cd ../frontend && npm install
 
 > **Note:** The development environment requires Node.js 18 or newer.
 
-This repository is configured as an npm workspace, so you can also install everything in a single step from the root directory:
-
-```bash
-npm install --workspaces
-```
-
 ## Shared npm scripts
 
 Each package exposes a consistent set of scripts to streamline common tasks:
@@ -43,16 +37,6 @@ Run a script by changing into the desired project directory, e.g.:
 ```bash
 cd backend
 npm run dev
-```
-
-The root `package.json` exposes helper scripts to fan out to the individual workspaces when you prefer to trigger actions from the monorepo root:
-
-```bash
-npm run lint      # Runs lint in backend/ and frontend/
-npm run format    # Formats both workspaces
-npm run build     # Builds both projects
-npm run dev:backend   # Starts the backend dev server
-npm run dev:frontend  # Starts the frontend dev server
 ```
 
 ## Environment variables
