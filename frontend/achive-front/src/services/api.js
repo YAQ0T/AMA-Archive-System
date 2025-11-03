@@ -24,7 +24,7 @@ const parseError = async (response) => {
     if (payload?.errors) {
       return payload.errors.map((err) => err.msg || err.message).join(', ');
     }
-  } catch (error) {
+  } catch {
     return response.statusText || 'Unexpected error';
   }
   return response.statusText || 'Unexpected error';
@@ -46,6 +46,8 @@ const request = async (path, options = {}) => {
 
   return response.json();
 };
+
+const listScanners = () => request('/api/scanners');
 
 const scanDocument = async (payload) => {
   const response = await fetch(`${BASE_URL}/api/documents/scan`, {
@@ -103,14 +105,14 @@ const uploadDocument = (payload, { onProgress } = {}) =>
           try {
             const data = JSON.parse(responseText);
             resolve(data);
-          } catch (error) {
+          } catch {
             reject(new ApiError('Upload succeeded but the server returned invalid data.'));
           }
         } else {
           try {
             const parsed = JSON.parse(responseText);
             reject(new ApiError(parsed.message || 'Upload failed.', status, parsed));
-          } catch (_error) {
+          } catch {
             reject(new ApiError('Upload failed.', status));
           }
         }
@@ -232,6 +234,7 @@ const reprintDocument = async (id, filename) => {
 export const api = {
   uploadDocument,
   scanDocument,
+  listScanners,
   listDocuments,
   downloadDocument,
   previewDocument,

@@ -11,7 +11,7 @@ const fs = require('fs');
 const { body, query, param, validationResult } = require('express-validator');
 
 const DocumentModel = require('./models/document');
-const { scanToPdf } = require('./services/scanner');
+const { scanToPdf, listScanners } = require('./services/scanner');
 
 const { MONTHS } = DocumentModel;
 
@@ -139,6 +139,36 @@ const parseTags = (value, { req }) => {
 };
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+app.get('/api/scanners', async (_req, res, next) => {
+  try {
+    const { scanners, rawOutput, stderr } = await listScanners();
+
+    const response = {
+      scanners,
+      summary: scanners.length
+        ? `Found ${scanners.length} scanner${scanners.length === 1 ? '' : 's'} via scanimage.`
+        : 'No scanners were reported by scanimage. Ensure devices are powered on and accessible to the host.',
+    };
+
+    if (rawOutput) {
+      response.rawOutput = rawOutput;
+    }
+
+    if (stderr) {
+      response.stderr = stderr;
+    }
+
+    res.json(response);
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      error.status = 500;
+      error.message =
+        'The scanimage command is not available on the server. Install SANE (scanimage) to enable scanner discovery.';
+    }
+    next(error);
+  }
+});
 
 app.post(
   '/api/documents',
