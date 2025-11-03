@@ -146,6 +146,12 @@ legend {
   resize: vertical;
 }
 
+.upload-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1.25rem;
+}
+
 .tag-input {
   display: flex;
   gap: 0.75rem;
@@ -426,6 +432,20 @@ legend {
   color: #fff;
 }
 
+.hierarchy-filter-bar {
+  margin-top: 1rem;
+}
+
+.hierarchy-selector-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.hierarchy-selector-inline .field {
+  min-width: 180px;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -505,6 +525,10 @@ legend {
     color: #111827;
     border: 1px solid #d1d5db;
     background: #fff;
+  }
+
+  .hierarchy-selector-inline {
+    flex-direction: column;
   }
 
   .pagination {

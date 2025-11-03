@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { api, ApiError } from '../services/api'
 import { useArchiveContext } from '../context/ArchiveContext'
+import { MONTHS } from '../constants/archive'
 
 const ARCHIVE_PERIODS = ['Monthly', 'Quarterly', 'Yearly', 'Indefinite']
 
@@ -11,13 +12,17 @@ export const ScanUpload = () => {
   const [file, setFile] = useState(null)
   const [tags, setTags] = useState([createEmptyTag()])
   const [notes, setNotes] = useState('')
+  const [year, setYear] = useState(() => String(new Date().getFullYear()))
+  const [merchant, setMerchant] = useState('')
+  const [month, setMonth] = useState(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
   const [progress, setProgress] = useState(0)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
 
   const isSubmitDisabled = useMemo(() => {
     const hasInvalidTag = tags.some((tag) => !tag.name || tag.price === '' || !tag.archivePeriod)
-    return !file || hasInvalidTag
-  }, [file, tags])
+    const invalidMetadata = !year || !merchant.trim() || !month
+    return !file || hasInvalidTag || invalidMetadata
+  }, [file, tags, year, merchant, month])
 
   const handleFileChange = (event) => {
     const selected = event.target.files?.[0]
@@ -65,6 +70,12 @@ export const ScanUpload = () => {
     setStatus({ type: 'loading', message: 'Uploading document…' })
 
     try {
+      const trimmedMerchant = merchant.trim()
+      if (!Number.isFinite(Number(year)) || !trimmedMerchant || !month) {
+        setStatus({ type: 'error', message: 'Please provide a valid year, merchant name, and month.' })
+        return
+      }
+
       await api.uploadDocument(
         {
           file,
@@ -74,6 +85,9 @@ export const ScanUpload = () => {
             price: Number(tag.price),
             archivePeriod: tag.archivePeriod,
           })),
+          year,
+          merchant: trimmedMerchant,
+          month,
         },
         {
           onProgress: (percent) => {
@@ -87,6 +101,9 @@ export const ScanUpload = () => {
       setFile(null)
       setTags([createEmptyTag()])
       setNotes('')
+      setYear(() => String(new Date().getFullYear()))
+      setMerchant('')
+      setMonth(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
       refresh()
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Upload failed. Please try again.'
@@ -122,6 +139,47 @@ export const ScanUpload = () => {
             onChange={(event) => setNotes(event.target.value)}
             placeholder="Describe this document for your team…"
           />
+        </div>
+
+        <div className="upload-metadata-grid">
+          <div className="field">
+            <label htmlFor="document-year">Year</label>
+            <input
+              id="document-year"
+              type="number"
+              min="1900"
+              max="9999"
+              value={year}
+              onChange={(event) => setYear(event.target.value)}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="document-merchant">Merchant</label>
+            <input
+              id="document-merchant"
+              type="text"
+              value={merchant}
+              onChange={(event) => setMerchant(event.target.value)}
+              placeholder="e.g. ACME Trading Co."
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="document-month">Month</label>
+            <select
+              id="document-month"
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+              required
+            >
+              {MONTHS.map((label) => (
+                <option key={label} value={label}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <fieldset className="tags-fieldset">

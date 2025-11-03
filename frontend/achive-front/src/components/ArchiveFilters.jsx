@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { HierarchySelector } from './HierarchySelector'
 
 const ARCHIVE_PERIODS = ['Monthly', 'Quarterly', 'Yearly', 'Indefinite']
 
-export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh }) => {
+export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy }) => {
   const [localFilters, setLocalFilters] = useState(filters)
   const [tagInput, setTagInput] = useState('')
 
@@ -21,6 +22,15 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh }) => {
     if (filters.archivePeriod) {
       parts.push(`Archive: ${filters.archivePeriod}`)
     }
+    if (filters.year) {
+      parts.push(`Year: ${filters.year}`)
+    }
+    if (filters.merchant) {
+      parts.push(`Merchant: ${filters.merchant}`)
+    }
+    if (filters.month) {
+      parts.push(`Month: ${filters.month}`)
+    }
     if (filters.tags?.length) {
       parts.push(`Tags: ${filters.tags.join(', ')}`)
     }
@@ -29,6 +39,16 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh }) => {
 
   const handleChange = (field, value) => {
     const next = { ...localFilters, [field]: value }
+    setLocalFilters(next)
+  }
+
+  const handleHierarchyChange = (nextValue) => {
+    const next = {
+      ...localFilters,
+      year: nextValue.year ?? '',
+      merchant: nextValue.merchant ?? '',
+      month: nextValue.month ?? '',
+    }
     setLocalFilters(next)
   }
 
@@ -44,6 +64,9 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh }) => {
       maxPrice: '',
       archivePeriod: '',
       tags: [],
+      year: '',
+      merchant: '',
+      month: '',
     }
     setLocalFilters(cleared)
     setTagInput('')
@@ -122,6 +145,12 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh }) => {
             ))}
           </select>
         </div>
+        <HierarchySelector
+          hierarchy={hierarchy}
+          value={{ year: localFilters.year, merchant: localFilters.merchant, month: localFilters.month }}
+          onChange={handleHierarchyChange}
+          variant="grid"
+        />
         <div className="field">
           <label htmlFor="filter-tags">Tags</label>
           <div className="tag-input">

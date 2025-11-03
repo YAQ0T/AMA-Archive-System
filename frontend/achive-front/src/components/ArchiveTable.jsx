@@ -51,6 +51,9 @@ export const ArchiveTable = ({ archives, loading }) => {
         <thead>
           <tr>
             <th>Name</th>
+            <th>Year</th>
+            <th>Merchant</th>
+            <th>Month</th>
             <th>Tags</th>
             <th>Total price</th>
             <th>Archive period</th>
@@ -69,6 +72,9 @@ export const ArchiveTable = ({ archives, loading }) => {
             return (
               <tr key={document._id}>
                 <td data-label="Name">{document.originalName || 'Untitled document'}</td>
+                <td data-label="Year">{document.year || '—'}</td>
+                <td data-label="Merchant">{document.merchantName || '—'}</td>
+                <td data-label="Month">{document.month || '—'}</td>
                 <td data-label="Tags">
                   <div className="tag-list compact">
                     {document.tags?.map((tag) => (

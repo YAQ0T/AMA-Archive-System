@@ -109,22 +109,48 @@ const uploadDocument = (payload, { onProgress } = {}) =>
         formData.append('tags', JSON.stringify(payload.tags));
       }
 
+      if (payload.year) {
+        formData.append('year', String(payload.year));
+      }
+
+      if (payload.merchant) {
+        formData.append('merchant', payload.merchant);
+      }
+
+      if (payload.month) {
+        formData.append('month', payload.month);
+      }
+
       xhr.send(formData);
     } catch (error) {
       reject(new ApiError(error.message || 'Unexpected error while uploading.'));
     }
   });
 
-const listDocuments = async ({ name, archivePeriod, price, limit = 10, skip = 0 } = {}) => {
+const listDocuments = async ({
+  name,
+  archivePeriod,
+  price,
+  year,
+  merchant,
+  month,
+  limit = 10,
+  skip = 0,
+} = {}) => {
   const query = buildQueryString({
     name,
     archive: archivePeriod,
     price,
+    year,
+    merchant,
+    month,
     limit,
     skip,
   });
   return request(`/api/documents${query}`);
 };
+
+const getHierarchy = () => request('/api/documents/hierarchy');
 
 const fetchDocumentFile = async (id) => {
   const response = await fetch(`${BASE_URL}/api/documents/${id}/file`);
@@ -191,6 +217,7 @@ export const api = {
   downloadDocument,
   previewDocument,
   reprintDocument,
+  getHierarchy,
   BASE_URL,
 };
 

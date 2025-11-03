@@ -7,6 +7,9 @@ const DEFAULT_FILTERS = {
   maxPrice: '',
   archivePeriod: '',
   tags: [],
+  year: '',
+  merchant: '',
+  month: '',
 }
 
 const DEFAULT_PAGINATION = {
@@ -48,9 +51,22 @@ export const ArchiveProvider = ({ children }) => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [hasMore, setHasMore] = useState(false)
+  const [hierarchy, setHierarchy] = useState({ years: [] })
   const cacheRef = useRef(new Map())
 
   const serialise = useCallback((value) => JSON.stringify(value), [])
+
+  const loadHierarchy = useCallback(async () => {
+    try {
+      const data = await api.getHierarchy()
+      setHierarchy(data)
+      return data
+    } catch (apiError) {
+      console.error(apiError)
+      setHierarchy({ years: [] })
+      return { years: [] }
+    }
+  }, [])
 
   const fetchArchives = useCallback(
     async (nextFilters = filters, nextPagination = pagination, { force = false } = {}) => {
@@ -91,6 +107,9 @@ export const ArchiveProvider = ({ children }) => {
           name: resolvedFilters.name || undefined,
           archivePeriod: resolvedFilters.archivePeriod || undefined,
           price: apiPrice || undefined,
+          year: resolvedFilters.year || undefined,
+          merchant: resolvedFilters.merchant || undefined,
+          month: resolvedFilters.month || undefined,
           limit: resolvedPagination.pageSize,
           skip,
         })
@@ -159,11 +178,15 @@ export const ArchiveProvider = ({ children }) => {
 
   const refresh = useCallback(async () => {
     cacheRef.current.clear()
-    await fetchArchives(filters, pagination, { force: true })
-  }, [fetchArchives, filters, pagination])
+    await Promise.all([
+      fetchArchives(filters, pagination, { force: true }),
+      loadHierarchy(),
+    ])
+  }, [fetchArchives, filters, loadHierarchy, pagination])
 
   useEffect(() => {
     fetchArchives().catch(() => {})
+    loadHierarchy().catch(() => {})
   }, [])
 
   const value = useMemo(
@@ -177,8 +200,22 @@ export const ArchiveProvider = ({ children }) => {
       updateFilters,
       changePage,
       refresh,
+      hierarchy,
+      reloadHierarchy: loadHierarchy,
     }),
-    [archives, changePage, error, filters, hasMore, loading, pagination, refresh, updateFilters],
+    [
+      archives,
+      changePage,
+      error,
+      filters,
+      hasMore,
+      hierarchy,
+      loading,
+      pagination,
+      refresh,
+      updateFilters,
+      loadHierarchy,
+    ],
   )
 
   return <ArchiveContext.Provider value={value}>{children}</ArchiveContext.Provider>
