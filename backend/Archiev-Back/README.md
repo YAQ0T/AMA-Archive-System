@@ -52,6 +52,26 @@ Upload a document file with associated metadata.
   - `notes` – optional string
 - **Response:** 201 with created document metadata
 
+### POST `/api/documents/scan`
+
+Trigger a scan on the host machine using the `scanimage` command and store the resulting PDF with metadata. The server must have
+the SANE utilities (`scanimage`) installed and be connected to a compatible scanner.
+
+- **Content type:** `application/json`
+- **Body:**
+  - `year` – required, 4 digit year (1900-9999)
+  - `merchant` – required, merchant name string
+  - `month` – required, month name (January-December)
+  - `tags` – optional array with objects `{ "name": string, "price": number, "archivePeriod": string }`
+  - `notes` – optional string
+  - `device` – optional string identifying the scanner device (passed to `scanimage --device-name`)
+  - `mode` – optional scan mode string (e.g. `Color`, `Gray`)
+  - `resolution` – optional numeric DPI value
+- **Response:** 201 with created document metadata
+
+If the server cannot locate the `scanimage` binary or no scanners are available, the endpoint responds with an error describing
+the issue.
+
 ### GET `/api/documents`
 
 List documents with optional filters.
