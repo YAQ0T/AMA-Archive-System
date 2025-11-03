@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArchiveTable } from '../components/ArchiveTable'
+import { HierarchySelector } from '../components/HierarchySelector'
 import { useArchiveContext } from '../context/ArchiveContext'
 
 const buildStats = (archives) => {
@@ -24,8 +25,12 @@ const buildStats = (archives) => {
 }
 
 export const Search = () => {
-  const { archives, filters, updateFilters, loading, error, refresh } = useArchiveContext()
+  const { archives, filters, updateFilters, loading, error, refresh, hierarchy } = useArchiveContext()
   const [searchTerm, setSearchTerm] = useState(filters.name)
+
+  useEffect(() => {
+    setSearchTerm(filters.name)
+  }, [filters.name])
 
   const stats = useMemo(() => buildStats(archives), [archives])
 
@@ -39,6 +44,15 @@ export const Search = () => {
       ...filters,
       name: searchTerm,
       tags: derivedTags.length ? derivedTags : filters.tags,
+    })
+  }
+
+  const handleHierarchyChange = (next) => {
+    updateFilters({
+      ...filters,
+      year: next.year ?? '',
+      merchant: next.merchant ?? '',
+      month: next.month ?? '',
     })
   }
 
@@ -66,6 +80,14 @@ export const Search = () => {
             Refresh
           </button>
         </form>
+        <div className="hierarchy-filter-bar">
+          <HierarchySelector
+            hierarchy={hierarchy}
+            value={{ year: filters.year, merchant: filters.merchant, month: filters.month }}
+            onChange={handleHierarchyChange}
+            variant="inline"
+          />
+        </div>
       </header>
 
       <section className="card metrics" aria-label="Result summary">

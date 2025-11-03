@@ -10,7 +10,11 @@ const path = require('path');
 const fs = require('fs');
 const { body, query, param, validationResult } = require('express-validator');
 
-const Document = require('./models/document');
+const DocumentModel = require('./models/document');
+
+const { MONTHS } = DocumentModel;
+
+const Document = DocumentModel;
 
 const app = express();
 
@@ -133,11 +137,36 @@ const parseTags = (value, { req }) => {
   return true;
 };
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 app.post(
   '/api/documents',
   upload.single('file'),
   body('notes').optional({ nullable: true }).isString().trim().isLength({ max: 2000 }),
   body('tags').optional().custom(parseTags),
+  body('year')
+    .exists()
+    .withMessage('Year is required.')
+    .bail()
+    .isInt({ min: 1900, max: 9999 })
+    .toInt(),
+  body('merchant')
+    .exists()
+    .withMessage('Merchant name is required.')
+    .bail()
+    .isString()
+    .trim()
+    .isLength({ min: 1, max: 200 })
+    .withMessage('Merchant name must be between 1 and 200 characters.'),
+  body('month')
+    .exists()
+    .withMessage('Month is required.')
+    .bail()
+    .isString()
+    .trim()
+    .bail()
+    .isIn(MONTHS)
+    .withMessage(`Month must be one of: ${MONTHS.join(', ')}`),
   handleValidation,
   async (req, res, next) => {
     try {
@@ -153,6 +182,9 @@ app.post(
         size: req.file.size,
         tags: req.parsedTags || [],
         notes: req.body.notes,
+        year: Number(req.body.year),
+        merchantName: req.body.merchant.trim(),
+        month: req.body.month,
       });
 
       return res.status(201).json(document);
@@ -173,24 +205,41 @@ app.get(
     query('name').optional().isString(),
     query('price').optional().isFloat(),
     query('archive').optional().isString(),
+    query('year').optional().isInt({ min: 1900, max: 9999 }),
+    query('merchant').optional().isString(),
+    query('month').optional().isIn(MONTHS),
     query('limit').optional().isInt({ min: 1, max: 100 }),
     query('skip').optional().isInt({ min: 0 }),
   ],
   handleValidation,
   async (req, res, next) => {
     try {
-      const { name, price, archive, limit = 50, skip = 0 } = req.query;
+      const { name, price, archive, year, merchant, month, limit = 50, skip = 0 } = req.query;
 
       const filters = {};
 
       if (name) {
-        filters['tags.name'] = new RegExp(name, 'i');
+        const regex = new RegExp(name, 'i');
+        filters.$or = [
+          { originalName: regex },
+          { 'tags.name': regex },
+          { merchantName: regex },
+        ];
       }
       if (price) {
         filters['tags.price'] = Number(price);
       }
       if (archive) {
         filters['tags.archivePeriod'] = new RegExp(archive, 'i');
+      }
+      if (year) {
+        filters.year = Number(year);
+      }
+      if (merchant) {
+        filters.merchantName = new RegExp(`^${escapeRegExp(merchant)}$`, 'i');
+      }
+      if (month) {
+        filters.month = new RegExp(`^${escapeRegExp(month)}$`, 'i');
       }
 
       const documents = await Document.find(filters)
@@ -204,6 +253,49 @@ app.get(
     }
   }
 );
+
+app.get('/api/documents/hierarchy', async (_req, res, next) => {
+  try {
+    const records = await Document.find({}, { year: 1, merchantName: 1, month: 1, _id: 0 }).lean();
+
+    const monthOrder = new Map(MONTHS.map((value, index) => [value, index]));
+    const tree = new Map();
+
+    records.forEach(({ year, merchantName, month }) => {
+      if (year === undefined || merchantName === undefined || month === undefined) {
+        return;
+      }
+      const safeYear = Number(year);
+      if (!tree.has(safeYear)) {
+        tree.set(safeYear, new Map());
+      }
+      const merchantKey = merchantName.trim();
+      const merchants = tree.get(safeYear);
+      if (!merchants.has(merchantKey)) {
+        merchants.set(merchantKey, new Set());
+      }
+      merchants.get(merchantKey).add(month);
+    });
+
+    const years = Array.from(tree.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([yearValue, merchantsMap]) => ({
+        year: yearValue,
+        merchants: Array.from(merchantsMap.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([merchantName, monthsSet]) => ({
+            name: merchantName,
+            months: Array.from(monthsSet.values()).sort(
+              (a, b) => (monthOrder.get(a) ?? 0) - (monthOrder.get(b) ?? 0)
+            ),
+          })),
+      }));
+
+    res.json({ years });
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get(
   '/api/documents/:id',

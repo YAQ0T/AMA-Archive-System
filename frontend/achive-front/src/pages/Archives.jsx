@@ -4,7 +4,7 @@ import { ArchiveTable } from '../components/ArchiveTable'
 import { useArchiveContext } from '../context/ArchiveContext'
 
 export const Archives = () => {
-  const { archives, filters, updateFilters, loading, error, changePage, pagination, hasMore, refresh } =
+  const { archives, filters, updateFilters, loading, error, changePage, pagination, hasMore, refresh, hierarchy } =
     useArchiveContext()
 
   const pageSummary = useMemo(() => {
@@ -37,7 +37,12 @@ export const Archives = () => {
         </div>
       </header>
 
-      <ArchiveFilters filters={filters} onFiltersChange={updateFilters} onRefresh={refresh} />
+      <ArchiveFilters
+        filters={filters}
+        onFiltersChange={updateFilters}
+        onRefresh={refresh}
+        hierarchy={hierarchy}
+      />
 
       {error && (
         <p className="status error" role="alert">

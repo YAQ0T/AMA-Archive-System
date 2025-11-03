@@ -1,5 +1,20 @@
 const mongoose = require('mongoose');
 
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
 const TagSchema = new mongoose.Schema(
   {
     name: {
@@ -54,6 +69,22 @@ const DocumentSchema = new mongoose.Schema(
       trim: true,
       maxlength: 2000,
     },
+    year: {
+      type: Number,
+      required: true,
+      min: 1900,
+      max: 9999,
+    },
+    merchantName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    month: {
+      type: String,
+      required: true,
+      enum: MONTHS,
+    },
   },
   {
     timestamps: true,
@@ -61,3 +92,4 @@ const DocumentSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('Document', DocumentSchema);
+module.exports.MONTHS = MONTHS;
