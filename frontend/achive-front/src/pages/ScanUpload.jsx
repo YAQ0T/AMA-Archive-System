@@ -4,25 +4,69 @@ import { useArchiveContext } from '../context/ArchiveContext'
 import { MONTHS } from '../constants/archive'
 
 const ARCHIVE_PERIODS = ['Monthly', 'Quarterly', 'Yearly', 'Indefinite']
+const SCAN_MODES = ['Color', 'Gray', 'Lineart']
+const SCAN_RESOLUTIONS = ['150', '200', '300', '600']
 
 const createEmptyTag = () => ({ name: '', price: '', archivePeriod: ARCHIVE_PERIODS[0] })
+const createDefaultScanOptions = () => ({
+  device: '',
+  mode: SCAN_MODES[0],
+  resolution: SCAN_RESOLUTIONS.includes('300') ? '300' : SCAN_RESOLUTIONS[0],
+})
 
 export const ScanUpload = () => {
   const { refresh } = useArchiveContext()
+  const [activeTab, setActiveTab] = useState('upload')
   const [file, setFile] = useState(null)
   const [tags, setTags] = useState([createEmptyTag()])
   const [notes, setNotes] = useState('')
   const [year, setYear] = useState(() => String(new Date().getFullYear()))
   const [merchant, setMerchant] = useState('')
   const [month, setMonth] = useState(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
-  const [progress, setProgress] = useState(0)
+  const [progress, setProgress] = useState(null)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
+  const [scanOptions, setScanOptions] = useState(() => createDefaultScanOptions())
 
-  const isSubmitDisabled = useMemo(() => {
-    const hasInvalidTag = tags.some((tag) => !tag.name || tag.price === '' || !tag.archivePeriod)
-    const invalidMetadata = !year || !merchant.trim() || !month
-    return !file || hasInvalidTag || invalidMetadata
-  }, [file, tags, year, merchant, month])
+  const hasInvalidTag = useMemo(
+    () => tags.some((tag) => !tag.name || tag.price === '' || !tag.archivePeriod),
+    [tags],
+  )
+
+  const invalidMetadata = useMemo(() => {
+    const trimmedMerchant = merchant.trim()
+    return !year || !trimmedMerchant || !month
+  }, [year, merchant, month])
+
+  const isUploadDisabled = useMemo(
+    () => invalidMetadata || hasInvalidTag || !file || status.type === 'loading',
+    [invalidMetadata, hasInvalidTag, file, status.type],
+  )
+
+  const isScanDisabled = useMemo(
+    () => invalidMetadata || hasInvalidTag || status.type === 'loading',
+    [invalidMetadata, hasInvalidTag, status.type],
+  )
+
+  const resetMetadata = () => {
+    setTags([createEmptyTag()])
+    setNotes('')
+    setYear(() => String(new Date().getFullYear()))
+    setMerchant('')
+    setMonth(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
+  }
+
+  const resetScanOptions = () => {
+    setScanOptions(createDefaultScanOptions())
+  }
+
+  const handleModeChange = (tab) => {
+    if (tab === activeTab) {
+      return
+    }
+    setActiveTab(tab)
+    setStatus({ type: 'idle', message: '' })
+    setProgress(null)
+  }
 
   const handleFileChange = (event) => {
     const selected = event.target.files?.[0]
@@ -44,6 +88,7 @@ export const ScanUpload = () => {
     }
 
     setFile(selected)
+    setProgress(null)
     setStatus({ type: 'idle', message: '' })
   }
 
@@ -59,10 +104,16 @@ export const ScanUpload = () => {
     setTags((current) => current.filter((_, tagIndex) => tagIndex !== index))
   }
 
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-    if (isSubmitDisabled) {
+  const submitUpload = async () => {
+    if (isUploadDisabled) {
       setStatus({ type: 'error', message: 'Please select a file and complete all metadata fields.' })
+      return
+    }
+
+    const trimmedMerchant = merchant.trim()
+    const numericYear = Number(year)
+    if (!Number.isFinite(numericYear) || !trimmedMerchant || !month) {
+      setStatus({ type: 'error', message: 'Please provide a valid year, merchant name, and month.' })
       return
     }
 
@@ -70,12 +121,6 @@ export const ScanUpload = () => {
     setStatus({ type: 'loading', message: 'Uploading document…' })
 
     try {
-      const trimmedMerchant = merchant.trim()
-      if (!Number.isFinite(Number(year)) || !trimmedMerchant || !month) {
-        setStatus({ type: 'error', message: 'Please provide a valid year, merchant name, and month.' })
-        return
-      }
-
       await api.uploadDocument(
         {
           file,
@@ -85,7 +130,7 @@ export const ScanUpload = () => {
             price: Number(tag.price),
             archivePeriod: tag.archivePeriod,
           })),
-          year,
+          year: numericYear,
           merchant: trimmedMerchant,
           month,
         },
@@ -99,15 +144,75 @@ export const ScanUpload = () => {
       setStatus({ type: 'success', message: 'Document uploaded successfully.' })
       setProgress(100)
       setFile(null)
-      setTags([createEmptyTag()])
-      setNotes('')
-      setYear(() => String(new Date().getFullYear()))
-      setMerchant('')
-      setMonth(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
+      resetMetadata()
+      resetScanOptions()
       refresh()
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Upload failed. Please try again.'
       setStatus({ type: 'error', message })
+      setProgress(null)
+    }
+  }
+
+  const submitScan = async () => {
+    if (isScanDisabled) {
+      setStatus({ type: 'error', message: 'Please complete all metadata fields before scanning.' })
+      return
+    }
+
+    const trimmedMerchant = merchant.trim()
+    const numericYear = Number(year)
+    if (!Number.isFinite(numericYear) || !trimmedMerchant || !month) {
+      setStatus({ type: 'error', message: 'Please provide a valid year, merchant name, and month.' })
+      return
+    }
+
+    setProgress(null)
+    setStatus({ type: 'loading', message: 'Scanning document…' })
+
+    try {
+      const payload = {
+        notes,
+        tags: tags.map((tag) => ({
+          name: tag.name,
+          price: Number(tag.price),
+          archivePeriod: tag.archivePeriod,
+        })),
+        year: numericYear,
+        merchant: trimmedMerchant,
+        month,
+      }
+
+      const trimmedDevice = scanOptions.device.trim()
+      if (trimmedDevice) {
+        payload.device = trimmedDevice
+      }
+      if (scanOptions.mode) {
+        payload.mode = scanOptions.mode
+      }
+      if (scanOptions.resolution) {
+        payload.resolution = Number(scanOptions.resolution)
+      }
+
+      await api.scanDocument(payload)
+
+      setStatus({ type: 'success', message: 'Document scanned and stored successfully.' })
+      resetMetadata()
+      resetScanOptions()
+      setFile(null)
+      refresh()
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'Scan failed. Please try again.'
+      setStatus({ type: 'error', message })
+    }
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    if (activeTab === 'upload') {
+      await submitUpload()
+    } else {
+      await submitScan()
     }
   }
 
@@ -115,20 +220,94 @@ export const ScanUpload = () => {
     <section className="card">
       <h2>Scan / Upload Document</h2>
       <p className="section-description">
-        Upload new documents, assign pricing, archive periods, and searchable tags. Progress updates will
-        appear as your file uploads.
+        {activeTab === 'upload'
+          ? 'Upload new documents, assign pricing, archive periods, and searchable tags. Progress updates will appear as your file uploads.'
+          : 'Trigger a connected scanner to capture a document, apply metadata, and automatically archive the resulting PDF.'}
       </p>
+
+      <div className="mode-toggle" role="tablist" aria-label="Document intake mode">
+        <button
+          type="button"
+          role="tab"
+          className={activeTab === 'upload' ? 'active' : ''}
+          aria-selected={activeTab === 'upload'}
+          onClick={() => handleModeChange('upload')}
+        >
+          Upload file
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={activeTab === 'scan' ? 'active' : ''}
+          aria-selected={activeTab === 'scan'}
+          onClick={() => handleModeChange('scan')}
+        >
+          Scan with device
+        </button>
+      </div>
+
       <form className="upload-form" onSubmit={handleSubmit}>
-        <div className="field">
-          <label htmlFor="document-file">Document file</label>
-          <input
-            id="document-file"
-            type="file"
-            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            onChange={handleFileChange}
-          />
-          {file && <p className="hint">Selected: {file.name}</p>}
-        </div>
+        {activeTab === 'upload' ? (
+          <div className="field">
+            <label htmlFor="document-file">Document file</label>
+            <input
+              id="document-file"
+              type="file"
+              accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={handleFileChange}
+            />
+            {file && <p className="hint">Selected: {file.name}</p>}
+          </div>
+        ) : (
+          <fieldset className="scan-options-fieldset">
+            <legend>Scanner configuration</legend>
+            <p className="hint">
+              Provide optional scanner overrides. Leave these fields blank to use the default device settings
+              configured on the server running <code>scanimage</code>.
+            </p>
+            <div className="scan-options-grid">
+              <div className="field">
+                <label htmlFor="scan-device">Device name</label>
+                <input
+                  id="scan-device"
+                  type="text"
+                  value={scanOptions.device}
+                  onChange={(event) => setScanOptions((current) => ({ ...current, device: event.target.value }))}
+                  placeholder="e.g. epkowa:usb:001:002"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="scan-mode">Scan mode</label>
+                <select
+                  id="scan-mode"
+                  value={scanOptions.mode}
+                  onChange={(event) => setScanOptions((current) => ({ ...current, mode: event.target.value }))}
+                >
+                  {SCAN_MODES.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {mode}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="scan-resolution">Resolution (DPI)</label>
+                <select
+                  id="scan-resolution"
+                  value={scanOptions.resolution}
+                  onChange={(event) => setScanOptions((current) => ({ ...current, resolution: event.target.value }))}
+                >
+                  <option value="">System default</option>
+                  {SCAN_RESOLUTIONS.map((dpi) => (
+                    <option key={dpi} value={dpi}>
+                      {dpi}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </fieldset>
+        )}
 
         <div className="field">
           <label htmlFor="document-notes">Notes (optional)</label>
@@ -235,15 +414,21 @@ export const ScanUpload = () => {
           </button>
         </fieldset>
 
-        <div className="progress">
-          <div className="progress-track" aria-hidden>
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
+        {progress !== null && (
+          <div className="progress">
+            <div className="progress-track" aria-hidden>
+              <div className="progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <span>{progress}%</span>
           </div>
-          <span>{progress}%</span>
-        </div>
+        )}
 
-        <button type="submit" className="primary" disabled={isSubmitDisabled}>
-          Upload document
+        <button
+          type="submit"
+          className="primary"
+          disabled={activeTab === 'upload' ? isUploadDisabled : isScanDisabled}
+        >
+          {activeTab === 'upload' ? 'Upload document' : 'Scan document'}
         </button>
       </form>
 
@@ -255,4 +440,3 @@ export const ScanUpload = () => {
     </section>
   )
 }
-

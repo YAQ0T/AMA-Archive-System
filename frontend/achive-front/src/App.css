@@ -105,6 +105,39 @@
   max-width: 65ch;
 }
 
+.mode-toggle {
+  margin: 1.25rem 0 1.75rem;
+  display: inline-flex;
+  padding: 0.35rem;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  gap: 0.35rem;
+}
+
+.mode-toggle button {
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  padding: 0.45rem 1.2rem;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mode-toggle button:hover,
+.mode-toggle button:focus-visible {
+  background: rgba(99, 102, 241, 0.12);
+  color: #111827;
+  outline: none;
+}
+
+.mode-toggle button.active {
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 12px 25px -20px rgba(79, 70, 229, 0.6);
+}
+
 .filter-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -289,6 +322,32 @@ legend {
   border: none;
   display: grid;
   gap: 1rem;
+}
+
+.scan-options-fieldset {
+  margin: 0 0 1.25rem;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  display: grid;
+  gap: 1rem;
+  background: rgba(238, 242, 255, 0.5);
+}
+
+.scan-options-fieldset legend {
+  padding: 0 0.25rem;
+}
+
+.scan-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1rem;
+}
+
+.scan-options-fieldset code {
+  background: rgba(79, 70, 229, 0.12);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.4rem;
 }
 
 .hint {
