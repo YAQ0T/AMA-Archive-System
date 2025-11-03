@@ -47,6 +47,24 @@ const request = async (path, options = {}) => {
   return response.json();
 };
 
+const scanDocument = async (payload) => {
+  const response = await fetch(`${BASE_URL}/api/documents/scan`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const message = await parseError(response);
+    throw new ApiError(message, response.status);
+  }
+
+  return response.json();
+};
+
 const buildQueryString = (params) => {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -213,6 +231,7 @@ const reprintDocument = async (id, filename) => {
 
 export const api = {
   uploadDocument,
+  scanDocument,
   listDocuments,
   downloadDocument,
   previewDocument,
