@@ -25,6 +25,24 @@ const buildScanArgs = ({ device, mode, resolution }) => {
   return args;
 };
 
+const parseScannerList = (output = '') =>
+  output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/device `([^']+)' is a (.+)/i);
+      if (!match) {
+        return null;
+      }
+
+      return {
+        id: match[1],
+        label: match[2].replace(/\s+/g, ' ').trim(),
+      };
+    })
+    .filter(Boolean);
+
 const runScanimage = (options = {}) =>
   new Promise((resolve, reject) => {
     const args = buildScanArgs(options);
@@ -56,6 +74,43 @@ const runScanimage = (options = {}) =>
       }
 
       resolve(Buffer.concat(chunks));
+    });
+  });
+
+const listScanners = () =>
+  new Promise((resolve, reject) => {
+    const scanner = spawn('scanimage', ['-L']);
+    let stdout = '';
+    let stderr = '';
+
+    scanner.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    scanner.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    scanner.on('error', (error) => {
+      reject(error);
+    });
+
+    scanner.on('close', (code) => {
+      if (code !== 0) {
+        const error = new Error(
+          stderr.trim() || `scanimage -L exited with code ${code}`
+        );
+        error.code = code;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+
+      resolve({
+        scanners: parseScannerList(stdout),
+        rawOutput: stdout.trim(),
+        stderr: stderr.trim(),
+      });
     });
   });
 
@@ -100,4 +155,5 @@ const scanToPdf = async (options = {}) => {
 
 module.exports = {
   scanToPdf,
+  listScanners,
 };

@@ -41,6 +41,14 @@ UPLOAD_DIR=uploads
 
 All endpoints are prefixed with `/api/documents`.
 
+### GET `/api/scanners`
+
+Return the list of scanners reported by `scanimage -L` on the backend host. The response includes the device identifier and a
+human-readable label when available.
+
+- **Response:** 200 with `{ scanners: Array<{ id: string, label: string }>, summary: string }`
+- Install SANE (`scanimage`) and the appropriate backends to discover network scanners.
+
 ### POST `/api/documents`
 
 Upload a document file with associated metadata.

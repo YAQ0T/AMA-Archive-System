@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../services/api'
 import { useArchiveContext } from '../context/ArchiveContext'
 import { MONTHS } from '../constants/archive'
@@ -26,6 +26,51 @@ export const ScanUpload = () => {
   const [progress, setProgress] = useState(null)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
   const [scanOptions, setScanOptions] = useState(() => createDefaultScanOptions())
+  const [availableScanners, setAvailableScanners] = useState([])
+  const [scannerDiscovery, setScannerDiscovery] = useState({ type: 'idle', message: '' })
+
+  const fetchScanners = useCallback(async () => {
+    setScannerDiscovery({ type: 'loading', message: 'Searching for scanners…' })
+
+    try {
+      const payload = await api.listScanners()
+      const scanners = Array.isArray(payload?.scanners) ? payload.scanners : []
+
+      setAvailableScanners(scanners)
+      setScannerDiscovery({
+        type: 'success',
+        message:
+          payload?.summary ||
+          (scanners.length
+            ? `Found ${scanners.length} scanner${scanners.length === 1 ? '' : 's'} via scanimage.`
+            : 'No scanners were reported by scanimage. Ensure each device is powered on and reachable.'),
+      })
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Unable to query scanners. Check that the backend server can run scanimage -L.'
+
+      setScannerDiscovery({ type: 'error', message })
+      setAvailableScanners([])
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab !== 'scan') {
+      return
+    }
+
+    fetchScanners()
+  }, [activeTab, fetchScanners])
+
+  useEffect(() => {
+    if (scanOptions.device || availableScanners.length !== 1) {
+      return
+    }
+
+    setScanOptions((current) => ({ ...current, device: availableScanners[0].id }))
+  }, [availableScanners, scanOptions.device])
 
   const hasInvalidTag = useMemo(
     () => tags.some((tag) => !tag.name || tag.price === '' || !tag.archivePeriod),
@@ -265,6 +310,23 @@ export const ScanUpload = () => {
               Provide optional scanner overrides. Leave these fields blank to use the default device settings
               configured on the server running <code>scanimage</code>.
             </p>
+            <div className="scanner-discovery">
+              <p
+                className={`hint${
+                  scannerDiscovery.type === 'error' ? ' error' : scannerDiscovery.type === 'success' ? ' success' : ''
+                }`}
+              >
+                {scannerDiscovery.message || 'Scanner discovery has not been run yet.'}
+              </p>
+              <button
+                type="button"
+                onClick={fetchScanners}
+                disabled={scannerDiscovery.type === 'loading'}
+                className="secondary"
+              >
+                {scannerDiscovery.type === 'loading' ? 'Refreshing…' : 'Refresh devices'}
+              </button>
+            </div>
             <div className="scan-options-grid">
               <div className="field">
                 <label htmlFor="scan-device">Device name</label>
@@ -274,7 +336,15 @@ export const ScanUpload = () => {
                   value={scanOptions.device}
                   onChange={(event) => setScanOptions((current) => ({ ...current, device: event.target.value }))}
                   placeholder="e.g. epkowa:usb:001:002"
+                  list="scan-device-options"
                 />
+                <datalist id="scan-device-options">
+                  {availableScanners.map((scanner) => (
+                    <option key={scanner.id} value={scanner.id}>
+                      {scanner.label}
+                    </option>
+                  ))}
+                </datalist>
               </div>
               <div className="field">
                 <label htmlFor="scan-mode">Scan mode</label>
@@ -306,6 +376,19 @@ export const ScanUpload = () => {
                 </select>
               </div>
             </div>
+            <details className="scanner-instructions">
+              <summary>How to prepare network scanners</summary>
+              <p className="hint">
+                The archive service relies on the SANE <code>scanimage</code> utility. To discover network scanners:
+              </p>
+              <ol>
+                <li>Ensure the scanner is powered on and connected to the same network as the backend server.</li>
+                <li>Install and configure the appropriate SANE backend for your model (for example, <code>airscan</code> or
+                  vendor-specific drivers).</li>
+                <li>On the backend host, run <code>scanimage -L</code> to confirm the device appears in the list.</li>
+                <li>Return here and choose the detected identifier from the list above, or type it manually.</li>
+              </ol>
+            </details>
           </fieldset>
         )}
 
