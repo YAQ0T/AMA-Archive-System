@@ -82,7 +82,7 @@ export const ArchiveTable = ({ archives, loading }) => {
                 </td>
                 <td data-label="Total price">${aggregatedPrice?.toFixed(2) || '0.00'}</td>
                 <td data-label="Uploaded">{formatDate(document.createdAt)}</td>
-                <td data-label="Actions" className="actions">
+                <td data-label="Actions" className="actions table-actions">
                   <button type="button" className="link" onClick={() => handlePreview(document)}>
                     Preview
                   </button>
