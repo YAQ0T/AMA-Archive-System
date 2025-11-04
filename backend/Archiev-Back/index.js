@@ -11,7 +11,6 @@ const fs = require('fs');
 const { body, query, param, validationResult } = require('express-validator');
 
 const DocumentModel = require('./models/document');
-const { scanToPdf, listScanners } = require('./services/scanner');
 
 const { MONTHS } = DocumentModel;
 
@@ -124,51 +123,17 @@ const parseTags = (value, { req }) => {
     if (tag.price === undefined || Number.isNaN(Number(tag.price))) {
       throw new Error(`Tag at position ${index} must include a numeric price.`);
     }
-    if (!tag.archivePeriod || typeof tag.archivePeriod !== 'string' || !tag.archivePeriod.trim()) {
-      throw new Error(`Tag at position ${index} must include an archivePeriod.`);
-    }
   });
 
   req.parsedTags = parsed.map((tag) => ({
     name: tag.name.trim(),
     price: Number(tag.price),
-    archivePeriod: tag.archivePeriod.trim(),
   }));
 
   return true;
 };
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-app.get('/api/scanners', async (_req, res, next) => {
-  try {
-    const { scanners, rawOutput, stderr } = await listScanners();
-
-    const response = {
-      scanners,
-      summary: scanners.length
-        ? `Found ${scanners.length} scanner${scanners.length === 1 ? '' : 's'} via scanimage.`
-        : 'No scanners were reported by scanimage. Ensure devices are powered on and accessible to the host.',
-    };
-
-    if (rawOutput) {
-      response.rawOutput = rawOutput;
-    }
-
-    if (stderr) {
-      response.stderr = stderr;
-    }
-
-    res.json(response);
-  } catch (error) {
-    if (error && error.code === 'ENOENT') {
-      error.status = 500;
-      error.message =
-        'The scanimage command is not available on the server. Install SANE (scanimage) to enable scanner discovery.';
-    }
-    next(error);
-  }
-});
 
 app.post(
   '/api/documents',
@@ -230,94 +195,11 @@ app.post(
   }
 );
 
-app.post(
-  '/api/documents/scan',
-  body('notes').optional({ nullable: true }).isString().trim().isLength({ max: 2000 }),
-  body('tags').optional().custom(parseTags),
-  body('year')
-    .exists()
-    .withMessage('Year is required.')
-    .bail()
-    .isInt({ min: 1900, max: 9999 })
-    .toInt(),
-  body('merchant')
-    .exists()
-    .withMessage('Merchant name is required.')
-    .bail()
-    .isString()
-    .trim()
-    .isLength({ min: 1, max: 200 })
-    .withMessage('Merchant name must be between 1 and 200 characters.'),
-  body('month')
-    .exists()
-    .withMessage('Month is required.')
-    .bail()
-    .isString()
-    .trim()
-    .bail()
-    .isIn(MONTHS)
-    .withMessage(`Month must be one of: ${MONTHS.join(', ')}`),
-  body('device').optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 200 }),
-  body('mode').optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 50 }),
-  body('resolution').optional({ nullable: true, checkFalsy: true }).isInt({ min: 50, max: 1200 }).toInt(),
-  handleValidation,
-  async (req, res, next) => {
-    let storedFilePath;
-
-    try {
-      const { pdfBuffer } = await scanToPdf({
-        device: req.body.device,
-        mode: req.body.mode,
-        resolution: req.body.resolution,
-      });
-
-      const timestamp = Date.now();
-      const storedName = `${timestamp}-scan.pdf`;
-      const absolutePath = path.join(uploadsDir, storedName);
-
-      await fs.promises.writeFile(absolutePath, pdfBuffer);
-      storedFilePath = absolutePath;
-
-      const document = await Document.create({
-        originalName: `Scanned-${timestamp}.pdf`,
-        storedName,
-        storagePath: path.relative(__dirname, absolutePath),
-        mimeType: 'application/pdf',
-        size: pdfBuffer.length,
-        tags: req.parsedTags || [],
-        notes: req.body.notes,
-        year: Number(req.body.year),
-        merchantName: req.body.merchant.trim(),
-        month: req.body.month,
-      });
-
-      return res.status(201).json(document);
-    } catch (error) {
-      if (storedFilePath) {
-        fs.promises.unlink(storedFilePath).catch(() => {});
-      }
-
-      if (error && error.code === 'ENOENT') {
-        error.status = 500;
-        error.message =
-          'The scanimage command is not available on the server. Install SANE (scanimage) to enable scanning.';
-      }
-
-      if (error && typeof error.message === 'string' && error.message.includes('No scanners were identified')) {
-        error.status = 503;
-      }
-
-      next(error);
-    }
-  }
-);
-
 app.get(
   '/api/documents',
   [
     query('name').optional().isString(),
     query('price').optional().isFloat(),
-    query('archive').optional().isString(),
     query('year').optional().isInt({ min: 1900, max: 9999 }),
     query('merchant').optional().isString(),
     query('month').optional().isIn(MONTHS),
@@ -327,7 +209,7 @@ app.get(
   handleValidation,
   async (req, res, next) => {
     try {
-      const { name, price, archive, year, merchant, month, limit = 50, skip = 0 } = req.query;
+      const { name, price, year, merchant, month, limit = 50, skip = 0 } = req.query;
 
       const filters = {};
 
@@ -341,9 +223,6 @@ app.get(
       }
       if (price) {
         filters['tags.price'] = Number(price);
-      }
-      if (archive) {
-        filters['tags.archivePeriod'] = new RegExp(archive, 'i');
       }
       if (year) {
         filters.year = Number(year);

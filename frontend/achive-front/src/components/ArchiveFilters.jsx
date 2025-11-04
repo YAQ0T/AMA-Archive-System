@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { HierarchySelector } from './HierarchySelector'
 
-const ARCHIVE_PERIODS = ['Monthly', 'Quarterly', 'Yearly', 'Indefinite']
-
 export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy }) => {
   const [localFilters, setLocalFilters] = useState(filters)
   const [tagInput, setTagInput] = useState('')
@@ -18,9 +16,6 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy 
     }
     if (filters.minPrice !== '' || filters.maxPrice !== '') {
       parts.push(`Price between ${filters.minPrice || 'any'} and ${filters.maxPrice || 'any'}`)
-    }
-    if (filters.archivePeriod) {
-      parts.push(`Archive: ${filters.archivePeriod}`)
     }
     if (filters.year) {
       parts.push(`Year: ${filters.year}`)
@@ -62,7 +57,6 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy 
       name: '',
       minPrice: '',
       maxPrice: '',
-      archivePeriod: '',
       tags: [],
       year: '',
       merchant: '',
@@ -129,21 +123,6 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy 
             value={localFilters.maxPrice}
             onChange={(event) => handleChange('maxPrice', event.target.value)}
           />
-        </div>
-        <div className="field">
-          <label htmlFor="filter-archive">Archive period</label>
-          <select
-            id="filter-archive"
-            value={localFilters.archivePeriod}
-            onChange={(event) => handleChange('archivePeriod', event.target.value)}
-          >
-            <option value="">Any</option>
-            {ARCHIVE_PERIODS.map((period) => (
-              <option key={period} value={period}>
-                {period}
-              </option>
-            ))}
-          </select>
         </div>
         <HierarchySelector
           hierarchy={hierarchy}

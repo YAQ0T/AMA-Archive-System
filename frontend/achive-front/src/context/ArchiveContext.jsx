@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../services/api'
 
@@ -5,7 +6,6 @@ const DEFAULT_FILTERS = {
   name: '',
   minPrice: '',
   maxPrice: '',
-  archivePeriod: '',
   tags: [],
   year: '',
   merchant: '',
@@ -105,7 +105,6 @@ export const ArchiveProvider = ({ children }) => {
 
         const documents = await api.listDocuments({
           name: resolvedFilters.name || undefined,
-          archivePeriod: resolvedFilters.archivePeriod || undefined,
           price: apiPrice || undefined,
           year: resolvedFilters.year || undefined,
           merchant: resolvedFilters.merchant || undefined,
