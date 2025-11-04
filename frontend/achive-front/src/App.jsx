@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { ArchiveProvider } from './context/ArchiveContext'
-import { ScanUpload } from './pages/ScanUpload'
+import { Upload } from './pages/Upload'
 import { Archives } from './pages/Archives'
 import { Search } from './pages/Search'
 
 const ROUTES = {
-  '#/scan': {
-    title: 'Scan / Upload',
-    element: <ScanUpload />,
+  '#/upload': {
+    title: 'Upload',
+    element: <Upload />,
   },
   '#/archives': {
     title: 'Archives',
@@ -20,7 +20,7 @@ const ROUTES = {
   },
 }
 
-const DEFAULT_ROUTE = '#/scan'
+const DEFAULT_ROUTE = '#/upload'
 
 const resolveRoute = () => {
   if (typeof window === 'undefined') {

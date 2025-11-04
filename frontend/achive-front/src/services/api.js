@@ -47,26 +47,6 @@ const request = async (path, options = {}) => {
   return response.json();
 };
 
-const listScanners = () => request('/api/scanners');
-
-const scanDocument = async (payload) => {
-  const response = await fetch(`${BASE_URL}/api/documents/scan`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const message = await parseError(response);
-    throw new ApiError(message, response.status);
-  }
-
-  return response.json();
-};
-
 const buildQueryString = (params) => {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -147,19 +127,9 @@ const uploadDocument = (payload, { onProgress } = {}) =>
     }
   });
 
-const listDocuments = async ({
-  name,
-  archivePeriod,
-  price,
-  year,
-  merchant,
-  month,
-  limit = 10,
-  skip = 0,
-} = {}) => {
+const listDocuments = async ({ name, price, year, merchant, month, limit = 10, skip = 0 } = {}) => {
   const query = buildQueryString({
     name,
-    archive: archivePeriod,
     price,
     year,
     merchant,
@@ -233,8 +203,6 @@ const reprintDocument = async (id, filename) => {
 
 export const api = {
   uploadDocument,
-  scanDocument,
-  listScanners,
   listDocuments,
   downloadDocument,
   previewDocument,

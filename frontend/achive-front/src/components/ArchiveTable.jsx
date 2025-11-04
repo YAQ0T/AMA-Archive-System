@@ -56,7 +56,6 @@ export const ArchiveTable = ({ archives, loading }) => {
             <th>Month</th>
             <th>Tags</th>
             <th>Total price</th>
-            <th>Archive period</th>
             <th>Uploaded</th>
             <th>Actions</th>
           </tr>
@@ -64,10 +63,6 @@ export const ArchiveTable = ({ archives, loading }) => {
         <tbody>
           {archives.map((document) => {
             const aggregatedPrice = document.tags?.reduce((sum, tag) => sum + Number(tag.price || 0), 0)
-            const archivePeriods = (document.tags || [])
-              .map((tag) => tag.archivePeriod)
-              .filter(Boolean)
-              .join(', ')
 
             return (
               <tr key={document._id}>
@@ -78,7 +73,7 @@ export const ArchiveTable = ({ archives, loading }) => {
                 <td data-label="Tags">
                   <div className="tag-list compact">
                     {document.tags?.map((tag) => (
-                      <span key={`${document._id}-${tag.name}-${tag.archivePeriod}`} className="tag">
+                      <span key={`${document._id}-${tag.name}-${tag.price}`} className="tag">
                         {tag.name}
                       </span>
                     ))}
@@ -86,7 +81,6 @@ export const ArchiveTable = ({ archives, loading }) => {
                   </div>
                 </td>
                 <td data-label="Total price">${aggregatedPrice?.toFixed(2) || '0.00'}</td>
-                <td data-label="Archive period">{archivePeriods || '—'}</td>
                 <td data-label="Uploaded">{formatDate(document.createdAt)}</td>
                 <td data-label="Actions" className="actions">
                   <button type="button" className="link" onClick={() => handlePreview(document)}>
@@ -107,4 +101,3 @@ export const ArchiveTable = ({ archives, loading }) => {
     </div>
   )
 }
-

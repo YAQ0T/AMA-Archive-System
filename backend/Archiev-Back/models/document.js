@@ -27,11 +27,6 @@ const TagSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
-    archivePeriod: {
-      type: String,
-      required: true,
-      trim: true,
-    },
   },
   { _id: false }
 );

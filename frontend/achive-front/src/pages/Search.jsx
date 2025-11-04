@@ -8,16 +8,12 @@ const buildStats = (archives) => {
     documents: archives.length,
     tags: 0,
     value: 0,
-    archivePeriods: new Map(),
   }
 
   archives.forEach((document) => {
     (document.tags || []).forEach((tag) => {
       totals.tags += 1
       totals.value += Number(tag.price || 0)
-      if (tag.archivePeriod) {
-        totals.archivePeriods.set(tag.archivePeriod, (totals.archivePeriods.get(tag.archivePeriod) || 0) + 1)
-      }
     })
   })
 
@@ -102,17 +98,6 @@ export const Search = () => {
         <div>
           <span className="metric-label">Total value</span>
           <strong className="metric-value">${stats.value.toFixed(2)}</strong>
-        </div>
-        <div>
-          <span className="metric-label">Archive mix</span>
-          <div className="metric-breakdown">
-            {Array.from(stats.archivePeriods.entries()).map(([period, count]) => (
-              <span key={period}>
-                {period}: {count}
-              </span>
-            ))}
-            {!stats.archivePeriods.size && <span className="empty">No archive data</span>}
-          </div>
         </div>
       </section>
 
