@@ -162,7 +162,7 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy 
             {!localFilters.tags?.length && <span className="empty">No tags selected</span>}
           </div>
         </div>
-        <div className="actions">
+        <div className="actions filter-actions">
           <button type="submit" className="primary">
             Apply filters
           </button>
