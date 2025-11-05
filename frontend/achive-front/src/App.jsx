@@ -65,25 +65,27 @@ function App() {
   return (
     <ArchiveProvider>
       <div className="app-shell">
-        <aside className="sidebar">
-          <h1 className="brand">AMA Archive</h1>
-          <nav>
-            {Object.entries(ROUTES).map(([path, descriptor]) => (
-              <button
-                key={path}
-                type="button"
-                className={path === route ? 'active' : ''}
-                onClick={() => navigate(path)}
-                aria-current={path === route ? 'page' : undefined}
-              >
-                {descriptor.title}
-              </button>
-            ))}
-          </nav>
-          <div className="sidebar-footer">
+        <header className="topbar">
+          <div className="topbar-primary">
+            <h1 className="brand">AMA Archive</h1>
+            <nav className="topbar-nav">
+              {Object.entries(ROUTES).map(([path, descriptor]) => (
+                <button
+                  key={path}
+                  type="button"
+                  className={path === route ? 'active' : ''}
+                  onClick={() => navigate(path)}
+                  aria-current={path === route ? 'page' : undefined}
+                >
+                  {descriptor.title}
+                </button>
+              ))}
+            </nav>
+          </div>
+          <div className="topbar-meta">
             <small>Connected to {connectionLabel}</small>
           </div>
-        </aside>
+        </header>
         <main className="main-content">
           <header className="page-header">
             <h2>{activeRoute.title}</h2>
