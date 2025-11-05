@@ -11,7 +11,24 @@ export const HierarchySelector = ({ hierarchy, value = {}, onChange, variant = '
   const yearEntry = useMemo(() => getYearEntry(years, value.year), [years, value.year])
   const merchants = useMemo(() => yearEntry?.merchants ?? [], [yearEntry])
   const merchantEntry = useMemo(() => getMerchantEntry(merchants, value.merchant), [merchants, value.merchant])
-  const months = useMemo(() => merchantEntry?.months ?? [], [merchantEntry])
+  const months = useMemo(() => {
+    const rawMonths = merchantEntry?.months ?? []
+    return rawMonths
+      .map((entry) => {
+        if (typeof entry === 'string') {
+          return { name: entry, documents: [] }
+        }
+        if (entry && typeof entry === 'object') {
+          const name = entry.name ?? entry.month ?? ''
+          if (!name) {
+            return null
+          }
+          return { ...entry, name }
+        }
+        return null
+      })
+      .filter(Boolean)
+  }, [merchantEntry])
 
   const handleYearChange = (event) => {
     const nextYear = event.target.value
@@ -77,8 +94,8 @@ export const HierarchySelector = ({ hierarchy, value = {}, onChange, variant = '
       >
         <option value="">{merchantEntry ? 'Any' : 'Select merchant first'}</option>
         {months.map((month) => (
-          <option key={month} value={month}>
-            {month}
+          <option key={month.name} value={month.name}>
+            {month.name}
           </option>
         ))}
       </select>

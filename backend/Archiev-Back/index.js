@@ -135,6 +135,46 @@ const parseTags = (value, { req }) => {
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const sanitizeDirectoryName = (value, { fallback = 'unknown' } = {}) => {
+  if (!value) {
+    return fallback;
+  }
+
+  const normalised = value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return normalised || fallback;
+};
+
+const moveDocumentToHierarchy = async ({ filePath, year, merchantName, month }) => {
+  const yearSegment = String(year ?? '')
+    .replace(/[^0-9]/g, '')
+    .trim();
+
+  if (!yearSegment) {
+    throw new Error('Invalid year received for document storage.');
+  }
+
+  const merchantSegment = sanitizeDirectoryName(merchantName, { fallback: 'merchant' });
+  const monthSegment = sanitizeDirectoryName(month, { fallback: 'month' });
+
+  const targetDirectory = path.join(uploadsDir, yearSegment, merchantSegment, monthSegment);
+  await fs.promises.mkdir(targetDirectory, { recursive: true });
+
+  const fileName = path.basename(filePath);
+  const destination = path.join(targetDirectory, fileName);
+
+  if (destination !== filePath) {
+    await fs.promises.rename(filePath, destination);
+  }
+
+  return destination;
+};
+
 app.post(
   '/api/documents',
   upload.single('file'),
@@ -170,17 +210,35 @@ app.post(
         return res.status(400).json({ message: 'A document file is required.' });
       }
 
+      const yearValue = Number(req.body.year);
+      const merchantValue = req.body.merchant.trim();
+      const monthValue = req.body.month;
+
+      const hierarchicalPath = await moveDocumentToHierarchy({
+        filePath: req.file.path,
+        year: yearValue,
+        merchantName: merchantValue,
+        month: monthValue,
+      });
+
+      req.file.path = hierarchicalPath;
+
+      const relativeStoragePath = path
+        .relative(__dirname, hierarchicalPath)
+        .split(path.sep)
+        .join('/');
+
       const document = await Document.create({
         originalName: req.file.originalname,
         storedName: req.file.filename,
-        storagePath: path.relative(__dirname, req.file.path),
+        storagePath: relativeStoragePath,
         mimeType: req.file.mimetype,
         size: req.file.size,
         tags: req.parsedTags || [],
         notes: req.body.notes,
-        year: Number(req.body.year),
-        merchantName: req.body.merchant.trim(),
-        month: req.body.month,
+        year: yearValue,
+        merchantName: merchantValue,
+        month: monthValue,
       });
 
       return res.status(201).json(document);
@@ -248,25 +306,76 @@ app.get(
 
 app.get('/api/documents/hierarchy', async (_req, res, next) => {
   try {
-    const records = await Document.find({}, { year: 1, merchantName: 1, month: 1, _id: 0 }).lean();
+    const records = await Document.find(
+      {},
+      {
+        year: 1,
+        merchantName: 1,
+        month: 1,
+        originalName: 1,
+        storedName: 1,
+        storagePath: 1,
+        mimeType: 1,
+        size: 1,
+        notes: 1,
+        tags: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      }
+    )
+      .sort({ createdAt: -1 })
+      .lean();
 
     const monthOrder = new Map(MONTHS.map((value, index) => [value, index]));
     const tree = new Map();
 
-    records.forEach(({ year, merchantName, month }) => {
+    records.forEach((record) => {
+      const { year, merchantName, month } = record;
       if (year === undefined || merchantName === undefined || month === undefined) {
         return;
       }
+
       const safeYear = Number(year);
+      if (!Number.isFinite(safeYear)) {
+        return;
+      }
+
+      const merchantKey = merchantName.trim();
+      if (!merchantKey) {
+        return;
+      }
+
       if (!tree.has(safeYear)) {
         tree.set(safeYear, new Map());
       }
-      const merchantKey = merchantName.trim();
+
       const merchants = tree.get(safeYear);
+
       if (!merchants.has(merchantKey)) {
-        merchants.set(merchantKey, new Set());
+        merchants.set(merchantKey, new Map());
       }
-      merchants.get(merchantKey).add(month);
+
+      const months = merchants.get(merchantKey);
+
+      if (!months.has(month)) {
+        months.set(month, []);
+      }
+
+      const documents = months.get(month);
+      const createdAt = record.createdAt || record.updatedAt || null;
+      const updatedAt = record.updatedAt || record.createdAt || null;
+      documents.push({
+        id: String(record._id),
+        originalName: record.originalName,
+        storedName: record.storedName,
+        storagePath: record.storagePath,
+        mimeType: record.mimeType,
+        size: record.size,
+        notes: record.notes,
+        tags: record.tags || [],
+        createdAt,
+        updatedAt,
+      });
     });
 
     const years = Array.from(tree.entries())
@@ -275,11 +384,20 @@ app.get('/api/documents/hierarchy', async (_req, res, next) => {
         year: yearValue,
         merchants: Array.from(merchantsMap.entries())
           .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([merchantName, monthsSet]) => ({
+          .map(([merchantName, monthsMap]) => ({
             name: merchantName,
-            months: Array.from(monthsSet.values()).sort(
-              (a, b) => (monthOrder.get(a) ?? 0) - (monthOrder.get(b) ?? 0)
-            ),
+            months: Array.from(monthsMap.entries())
+              .sort(
+                (a, b) => (monthOrder.get(a[0]) ?? 0) - (monthOrder.get(b[0]) ?? 0)
+              )
+              .map(([monthName, documents]) => ({
+                name: monthName,
+                documents: documents.sort((a, b) => {
+                  const aTime = new Date(a.createdAt || 0).getTime();
+                  const bTime = new Date(b.createdAt || 0).getTime();
+                  return bTime - aTime;
+                }),
+              })),
           })),
       }));
 
