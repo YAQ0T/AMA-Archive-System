@@ -8,6 +8,7 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const PDFDocument = require('pdfkit');
 const { body, query, param, validationResult } = require('express-validator');
 
 const DocumentModel = require('./models/document');
@@ -150,7 +151,7 @@ const parseTags = (value, { req }) => {
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const sanitizeDirectoryName = (value, { fallback = 'unknown' } = {}) => {
+const sanitizeNameSegment = (value, { fallback } = {}) => {
   if (!value) {
     return fallback;
   }
@@ -163,6 +164,108 @@ const sanitizeDirectoryName = (value, { fallback = 'unknown' } = {}) => {
     .replace(/^-|-$/g, '');
 
   return normalised || fallback;
+};
+
+const sanitizeDirectoryName = (value, { fallback = 'unknown' } = {}) =>
+  sanitizeNameSegment(value, { fallback });
+
+const sanitizeFileBaseName = (value, { fallback = 'document' } = {}) =>
+  sanitizeNameSegment(value, { fallback });
+
+const isImageMimeType = (mimetype) => typeof mimetype === 'string' && mimetype.startsWith('image/');
+
+const createPdfFromImages = async (files, { nameHint } = {}) => {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error('At least one image file is required to create a PDF.');
+  }
+
+  const firstOriginalName = files[0]?.originalname || '';
+  const baseName = sanitizeFileBaseName(nameHint || path.parse(firstOriginalName).name, {
+    fallback: 'document',
+  });
+
+  const uniqueName = `${Date.now()}-${baseName}.pdf`;
+  const pdfPath = path.join(uploadsDir, uniqueName);
+
+  const pdfDocument = new PDFDocument({ autoFirstPage: false, margin: 0 });
+  const writeStream = fs.createWriteStream(pdfPath);
+
+  const completion = new Promise((resolve, reject) => {
+    const rejectOnce = (error) => {
+      writeStream.destroy();
+      reject(error);
+    };
+
+    writeStream.on('finish', resolve);
+    writeStream.on('error', rejectOnce);
+    pdfDocument.on('error', rejectOnce);
+  });
+
+  pdfDocument.pipe(writeStream);
+
+  let pdfFinalised = false;
+
+  try {
+    for (const file of files) {
+      const image = pdfDocument.openImage(file.path);
+      const width = image.width || image.originalWidth || image.size?.width || 595.28; // default A4 width in pt
+      const height =
+        image.height || image.originalHeight || image.size?.height || 841.89; // default A4 height
+
+      pdfDocument.addPage({ size: [width, height] });
+      pdfDocument.image(image, 0, 0, { width, height });
+    }
+
+    pdfDocument.end();
+    pdfFinalised = true;
+    await completion;
+  } catch (error) {
+    try {
+      if (!pdfFinalised) {
+        pdfDocument.end();
+      }
+    } catch (endError) {
+      console.error('Failed to finalise PDF document after error', endError);
+    }
+
+    await new Promise((resolve) => writeStream.once('close', resolve)).catch(() => {});
+    await fs.promises.unlink(pdfPath).catch(() => {});
+    throw error;
+  }
+
+  const stats = await fs.promises.stat(pdfPath);
+
+  return {
+    path: pdfPath,
+    filename: uniqueName,
+    mimetype: 'application/pdf',
+    size: stats.size,
+    originalname: `${baseName}.pdf`,
+  };
+};
+
+const normaliseUploadedFiles = async (files, { nameHint } = {}) => {
+  if (!Array.isArray(files) || files.length === 0) {
+    return { files: [], generated: [] };
+  }
+
+  const areAllImages = files.every((file) => isImageMimeType(file.mimetype));
+
+  if (areAllImages) {
+    const combinedPdf = await createPdfFromImages(files, { nameHint });
+    await cleanupUploadedFiles(files);
+    return { files: [combinedPdf], generated: [combinedPdf] };
+  }
+
+  const hasImage = files.some((file) => isImageMimeType(file.mimetype));
+
+  if (hasImage) {
+    throw Object.assign(new Error('Mixing image files with other document types in a single upload is not supported.'), {
+      status: 400,
+    });
+  }
+
+  return { files, generated: [] };
 };
 
 const moveDocumentToHierarchy = async ({ filePath, year, merchantName, month }) => {
@@ -221,15 +324,25 @@ app.post(
   handleValidation,
   async (req, res, next) => {
     try {
-      const files = Array.isArray(req.files) ? req.files : [];
+      const uploadedFiles = Array.isArray(req.files) ? req.files : [];
 
-      if (files.length === 0) {
+      let files = [];
+      let generated = [];
+
+      if (uploadedFiles.length === 0) {
         return res.status(400).json({ message: 'At least one document file is required.' });
       }
 
       const yearValue = Number(req.body.year);
       const merchantValue = req.body.merchant.trim();
       const monthValue = req.body.month;
+
+      const nameHintParts = [merchantValue, monthValue, yearValue].filter(Boolean);
+      const normalisedFiles = await normaliseUploadedFiles(uploadedFiles, {
+        nameHint: nameHintParts.join('-') || undefined,
+      });
+      files = Array.isArray(normalisedFiles.files) ? normalisedFiles.files : [];
+      generated = Array.isArray(normalisedFiles.generated) ? normalisedFiles.generated : [];
 
       const documents = [];
 
@@ -266,8 +379,8 @@ app.post(
 
       return res.status(201).json({ documents });
     } catch (error) {
-      const files = Array.isArray(req.files) ? req.files : req.file ? [req.file] : [];
-      await cleanupUploadedFiles(files);
+      const uploadedFiles = Array.isArray(req.files) ? req.files : req.file ? [req.file] : [];
+      await cleanupUploadedFiles([...uploadedFiles, ...generated]);
       next(error);
     }
   }
