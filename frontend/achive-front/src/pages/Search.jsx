@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArchiveTable } from '../components/ArchiveTable'
 import { HierarchySelector } from '../components/HierarchySelector'
+import { DocumentEditor } from '../components/DocumentEditor'
 import { useArchiveContext } from '../context/ArchiveContext'
 
 const buildStats = (archives) => {
@@ -21,8 +22,12 @@ const buildStats = (archives) => {
 }
 
 export const Search = () => {
-  const { archives, filters, updateFilters, loading, error, refresh, hierarchy } = useArchiveContext()
+  const { archives, filters, updateFilters, loading, error, refresh, hierarchy, editDocument } =
+    useArchiveContext()
   const [searchTerm, setSearchTerm] = useState(filters.name)
+  const [editorState, setEditorState] = useState({ open: false, document: null })
+  const [editorError, setEditorError] = useState('')
+  const [editorSaving, setEditorSaving] = useState(false)
 
   useEffect(() => {
     setSearchTerm(filters.name)
@@ -50,6 +55,34 @@ export const Search = () => {
       merchant: next.merchant ?? '',
       month: next.month ?? '',
     })
+  }
+
+  const openEditor = (document) => {
+    setEditorState({ open: true, document })
+    setEditorError('')
+  }
+
+  const closeEditor = () => {
+    setEditorState({ open: false, document: null })
+    setEditorError('')
+    setEditorSaving(false)
+  }
+
+  const submitEditor = async (payload) => {
+    if (!editorState.document) {
+      return
+    }
+
+    setEditorSaving(true)
+    setEditorError('')
+
+    try {
+      await editDocument(editorState.document._id, payload)
+      closeEditor()
+    } catch (submitError) {
+      setEditorError(submitError.message || 'Unable to update the document.')
+      setEditorSaving(false)
+    }
   }
 
   return (
@@ -107,7 +140,16 @@ export const Search = () => {
         </p>
       )}
 
-      <ArchiveTable archives={archives} loading={loading} />
+      <ArchiveTable archives={archives} loading={loading} onEdit={openEditor} />
+
+      <DocumentEditor
+        open={editorState.open}
+        document={editorState.document}
+        onClose={closeEditor}
+        onSubmit={submitEditor}
+        saving={editorSaving}
+        error={editorError}
+      />
     </section>
   )
 }

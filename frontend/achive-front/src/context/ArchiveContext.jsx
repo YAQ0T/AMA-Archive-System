@@ -183,6 +183,44 @@ export const ArchiveProvider = ({ children }) => {
     ])
   }, [fetchArchives, filters, loadHierarchy, pagination])
 
+  const editDocument = useCallback(
+    async (id, updates) => {
+      const payload = {}
+
+      if (updates.notes !== undefined) {
+        payload.notes = updates.notes
+      }
+
+      if (updates.tags !== undefined) {
+        payload.tags = updates.tags
+      }
+
+      if (updates.year !== undefined) {
+        payload.year = updates.year
+      }
+
+      if (updates.merchant !== undefined) {
+        payload.merchant = updates.merchant
+      }
+
+      if (updates.month !== undefined) {
+        payload.month = updates.month
+      }
+
+      const updated = await api.updateDocument(id, payload)
+
+      cacheRef.current.clear()
+
+      await Promise.all([
+        fetchArchives(filters, pagination, { force: true }),
+        loadHierarchy(),
+      ])
+
+      return updated
+    },
+    [fetchArchives, filters, loadHierarchy, pagination],
+  )
+
   useEffect(() => {
     fetchArchives().catch(() => {})
     loadHierarchy().catch(() => {})
@@ -201,6 +239,7 @@ export const ArchiveProvider = ({ children }) => {
       refresh,
       hierarchy,
       reloadHierarchy: loadHierarchy,
+      editDocument,
     }),
     [
       archives,
@@ -214,6 +253,7 @@ export const ArchiveProvider = ({ children }) => {
       refresh,
       updateFilters,
       loadHierarchy,
+      editDocument,
     ],
   )
 

@@ -201,6 +201,15 @@ const reprintDocument = async (id, filename) => {
   return true;
 };
 
+const updateDocument = async (id, payload) =>
+  request(`/api/documents/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
 export const api = {
   uploadDocument,
   listDocuments,
@@ -208,6 +217,7 @@ export const api = {
   previewDocument,
   reprintDocument,
   getHierarchy,
+  updateDocument,
   BASE_URL,
 };
 
