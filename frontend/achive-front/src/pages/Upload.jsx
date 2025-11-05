@@ -3,6 +3,11 @@ import { api, ApiError } from '../services/api'
 import { useArchiveContext } from '../context/ArchiveContext'
 import { MONTHS } from '../constants/archive'
 
+const QUICK_TAG_PRESETS = [
+  { label: 'Cash', name: 'Cash' },
+  { label: 'Checks', name: 'Checks' },
+]
+
 const createTag = (name = '') => ({ name, price: '' })
 const createInitialTags = () => []
 
@@ -105,6 +110,10 @@ export const Upload = () => {
 
   const addTag = () => {
     setTags((current) => [...current, createTag()])
+  }
+
+  const addQuickTag = (preset) => {
+    setTags((current) => [...current, createTag(preset.name)])
   }
 
   const removeTag = (index) => {
@@ -247,6 +256,21 @@ export const Upload = () => {
         <fieldset className="tags-fieldset">
           <legend>Metadata tags (optional)</legend>
           <p className="hint">Add pricing or keyword tags if you need them. You can leave this empty.</p>
+          <div className="tags-quick-actions" aria-label="Quick tag options">
+            {QUICK_TAG_PRESETS.map((preset) => (
+              <button
+                key={preset.name}
+                type="button"
+                className="ghost"
+                onClick={() => addQuickTag(preset)}
+              >
+                {preset.label}
+              </button>
+            ))}
+            <button type="button" className="ghost quick-add" onClick={addTag} aria-label="Add custom tag">
+              +
+            </button>
+          </div>
           {tags.length === 0 && (
             <p className="hint">No metadata tags added.</p>
           )}

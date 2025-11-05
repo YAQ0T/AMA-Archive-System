@@ -336,6 +336,17 @@ legend {
   gap: 1rem;
 }
 
+.tags-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tags-quick-actions .quick-add {
+  font-weight: 600;
+}
+
 .hint {
   margin: 0;
   color: #6b7280;
