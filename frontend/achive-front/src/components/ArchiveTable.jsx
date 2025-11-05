@@ -67,7 +67,7 @@ export const ArchiveTable = ({ archives, loading, onEdit }) => {
 
             return (
               <tr key={document._id}>
-                <td data-label="Name">{document.originalName || 'Untitled document'}</td>
+                <td data-label="Name">{document.storedName || document.originalName || 'Untitled document'}</td>
                 <td data-label="Year">{document.year || '—'}</td>
                 <td data-label="Merchant">{document.merchantName || '—'}</td>
                 <td data-label="Month">{document.month || '—'}</td>
