@@ -12,3 +12,5 @@ export const MONTHS = [
   'November',
   'December',
 ];
+
+export const DEFAULT_TAG_NAMES = ['Cash', 'Checks'];

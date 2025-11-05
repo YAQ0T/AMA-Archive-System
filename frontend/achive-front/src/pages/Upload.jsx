@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react'
 import { api, ApiError } from '../services/api'
 import { useArchiveContext } from '../context/ArchiveContext'
-import { MONTHS } from '../constants/archive'
+import { DEFAULT_TAG_NAMES, MONTHS } from '../constants/archive'
 
-const createEmptyTag = () => ({ name: '', price: '' })
+const createTag = (name = '') => ({ name, price: '' })
+const createInitialTags = () => DEFAULT_TAG_NAMES.map((name) => createTag(name))
 
 export const Upload = () => {
   const { refresh } = useArchiveContext()
   const [file, setFile] = useState(null)
-  const [tags, setTags] = useState([createEmptyTag()])
+  const [tags, setTags] = useState(() => createInitialTags())
   const [notes, setNotes] = useState('')
   const [year, setYear] = useState(() => String(new Date().getFullYear()))
   const [merchant, setMerchant] = useState('')
@@ -29,7 +30,7 @@ export const Upload = () => {
   )
 
   const resetMetadata = () => {
-    setTags([createEmptyTag()])
+    setTags(createInitialTags())
     setNotes('')
     setYear(() => String(new Date().getFullYear()))
     setMerchant('')
@@ -65,7 +66,7 @@ export const Upload = () => {
   }
 
   const addTag = () => {
-    setTags((current) => [...current, createEmptyTag()])
+    setTags((current) => [...current, createTag()])
   }
 
   const removeTag = (index) => {
