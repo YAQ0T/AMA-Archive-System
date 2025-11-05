@@ -448,6 +448,17 @@ legend {
   vertical-align: top;
 }
 
+.archive-table .notes-cell {
+  max-width: 22rem;
+}
+
+.archive-table .document-notes {
+  margin: 0;
+  color: #374151;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .empty-state {
   text-align: center;
   color: #6b7280;
