@@ -172,6 +172,48 @@ const sanitizeDirectoryName = (value, { fallback = 'unknown' } = {}) =>
 const sanitizeFileBaseName = (value, { fallback = 'document' } = {}) =>
   sanitizeNameSegment(value, { fallback });
 
+const deriveStoredFileName = ({
+  currentStoredName,
+  merchantName,
+  month,
+  year,
+  fallbackPath,
+}) => {
+  const ensureTimestampPrefix = (value) => {
+    if (typeof value !== 'string' || !value.trim()) {
+      return String(Date.now());
+    }
+
+    const hyphenIndex = value.indexOf('-');
+    if (hyphenIndex > 0) {
+      return value.slice(0, hyphenIndex);
+    }
+
+    const digitsMatch = value.match(/^\d+/);
+    if (digitsMatch) {
+      return digitsMatch[0];
+    }
+
+    return String(Date.now());
+  };
+
+  const extension =
+    path.extname(currentStoredName || '') || path.extname(fallbackPath || '') || '';
+  const timestampPrefix = ensureTimestampPrefix(currentStoredName);
+  const segments = [
+    sanitizeFileBaseName(merchantName, { fallback: 'merchant' }),
+    sanitizeFileBaseName(month, { fallback: 'month' }),
+    sanitizeFileBaseName(year !== undefined && year !== null ? String(year) : '', {
+      fallback: 'year',
+    }),
+  ].filter(Boolean);
+
+  const baseName = segments.join('-') ||
+    sanitizeFileBaseName(path.parse(currentStoredName || '').name, { fallback: 'document' });
+
+  return `${timestampPrefix}-${baseName}${extension}`;
+};
+
 const isImageMimeType = (mimetype) => typeof mimetype === 'string' && mimetype.startsWith('image/');
 
 const createPdfFromImages = async (files, { nameHint } = {}) => {
@@ -655,25 +697,54 @@ app.patch(
       let relocationResult = null;
 
       if (shouldRelocate) {
+        let relocatedPath = null;
+        let finalAbsolutePath = null;
+
         try {
-          const relocatedPath = await moveDocumentToHierarchy({
+          relocatedPath = await moveDocumentToHierarchy({
             filePath: originalAbsolutePath,
             year: nextYear,
             merchantName: nextMerchant,
             month: nextMonth,
           });
 
+          const nextStoredName = deriveStoredFileName({
+            currentStoredName: document.storedName,
+            merchantName: nextMerchant,
+            month: nextMonth,
+            year: nextYear,
+            fallbackPath: relocatedPath,
+          });
+
+          const desiredPath = path.join(path.dirname(relocatedPath), nextStoredName);
+          finalAbsolutePath = relocatedPath;
+
+          if (desiredPath !== relocatedPath) {
+            await fs.promises.rename(relocatedPath, desiredPath);
+            finalAbsolutePath = desiredPath;
+          }
+
           relocationResult = {
             originalAbsolutePath,
-            relocatedAbsolutePath: relocatedPath,
+            relocatedAbsolutePath: finalAbsolutePath,
           };
 
           const relativeStoragePath = path
-            .relative(__dirname, relocatedPath)
+            .relative(__dirname, finalAbsolutePath)
             .split(path.sep)
             .join('/');
           document.storagePath = relativeStoragePath;
+          document.storedName = nextStoredName;
         } catch (error) {
+          const currentLocation = finalAbsolutePath || relocatedPath;
+          if (currentLocation && currentLocation !== originalAbsolutePath) {
+            try {
+              await fs.promises.mkdir(path.dirname(originalAbsolutePath), { recursive: true });
+              await fs.promises.rename(currentLocation, originalAbsolutePath);
+            } catch (restoreError) {
+              console.error('Failed to restore document after relocation error', restoreError);
+            }
+          }
           return next(error);
         }
       }
