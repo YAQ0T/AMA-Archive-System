@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MONTHS } from '../constants/archive'
+import { DEFAULT_TAG_NAMES, MONTHS } from '../constants/archive'
 
 const createTagRow = (tag) => ({
   name: tag?.name ?? '',
@@ -9,12 +9,14 @@ const createTagRow = (tag) => ({
       : '',
 })
 
+const createInitialTags = () => DEFAULT_TAG_NAMES.map((name) => createTagRow({ name }))
+
 export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, error }) => {
   const [notes, setNotes] = useState('')
   const [year, setYear] = useState('')
   const [merchant, setMerchant] = useState('')
   const [month, setMonth] = useState(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
-  const [tags, setTags] = useState([createTagRow()])
+  const [tags, setTags] = useState(() => createInitialTags())
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
@@ -26,7 +28,11 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
     setYear(document.year ? String(document.year) : '')
     setMerchant(document.merchantName ?? '')
     setMonth(document.month && MONTHS.includes(document.month) ? document.month : MONTHS[0])
-    setTags((document.tags && document.tags.length ? document.tags : [createTagRow()]).map(createTagRow))
+    const sourceTags =
+      document.tags && document.tags.length
+        ? document.tags
+        : DEFAULT_TAG_NAMES.map((name) => ({ name, price: '' }))
+    setTags(sourceTags.map(createTagRow))
     setFormError('')
   }, [document, open])
 
@@ -48,10 +54,8 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
 
   const removeTagRow = (index) => {
     setTags((current) => {
-      if (current.length <= 1) {
-        return [createTagRow()]
-      }
-      return current.filter((_, tagIndex) => tagIndex !== index)
+      const updated = current.filter((_, tagIndex) => tagIndex !== index)
+      return updated.length ? updated : createInitialTags()
     })
   }
 
