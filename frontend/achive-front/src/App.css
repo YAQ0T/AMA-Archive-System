@@ -350,6 +350,10 @@ legend {
   color: #b91c1c;
 }
 
+.hint.warning {
+  color: #dc2626;
+}
+
 .progress {
   display: flex;
   align-items: center;
