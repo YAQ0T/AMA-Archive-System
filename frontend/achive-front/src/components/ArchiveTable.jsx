@@ -72,11 +72,19 @@ export const ArchiveTable = ({ archives, loading, onEdit }) => {
                 <td data-label="Month">{document.month || '—'}</td>
                 <td data-label="Tags">
                   <div className="tag-list compact">
-                    {document.tags?.map((tag) => (
-                      <span key={`${document._id}-${tag.name}-${tag.price}`} className="tag">
-                        {tag.name}
-                      </span>
-                    ))}
+                    {document.tags?.map((tag) => {
+                      const price = Number(tag.price)
+                      const hasValidPrice = Number.isFinite(price) && price >= 0
+
+                      return (
+                        <span key={`${document._id}-${tag.name}-${tag.price}`} className="tag">
+                          <span className="tag-name">{tag.name}</span>
+                          {hasValidPrice && (
+                            <span className="tag-price">{`$${price.toFixed(2)}`}</span>
+                          )}
+                        </span>
+                      )
+                    })}
                     {!document.tags?.length && <span className="empty">No tags</span>}
                   </div>
                 </td>

@@ -179,6 +179,15 @@ legend {
   font-size: 0.85rem;
 }
 
+.tag-name {
+  font-weight: 600;
+}
+
+.tag-price {
+  color: #1f2937;
+  font-variant-numeric: tabular-nums;
+}
+
 .tag button {
   border: none;
   background: transparent;
