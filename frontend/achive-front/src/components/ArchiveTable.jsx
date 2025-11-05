@@ -55,6 +55,7 @@ export const ArchiveTable = ({ archives, loading, onEdit }) => {
             <th>Merchant</th>
             <th>Month</th>
             <th>Tags</th>
+            <th>Notes</th>
             <th>Total price</th>
             <th>Uploaded</th>
             <th>Actions</th>
@@ -87,6 +88,13 @@ export const ArchiveTable = ({ archives, loading, onEdit }) => {
                     })}
                     {!document.tags?.length && <span className="empty">No tags</span>}
                   </div>
+                </td>
+                <td data-label="Notes" className="notes-cell">
+                  {document.notes?.trim() ? (
+                    <p className="document-notes">{document.notes}</p>
+                  ) : (
+                    <span className="empty">No notes</span>
+                  )}
                 </td>
                 <td data-label="Total price">${aggregatedPrice?.toFixed(2) || '0.00'}</td>
                 <td data-label="Uploaded">{formatDate(document.createdAt)}</td>
