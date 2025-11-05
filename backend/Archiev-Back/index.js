@@ -72,23 +72,38 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50 MB
   },
   fileFilter: (_req, file, cb) => {
-    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const allowed = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/jpeg',
+      'image/png',
+    ];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF and Word documents are allowed.'));
+      const error = new Error('Only PDF, Word, or image files (JPEG, PNG) are allowed.');
+      error.status = 400;
+      cb(error);
     }
   },
 });
 
-const handleValidation = (req, res, next) => {
+const cleanupUploadedFiles = (files = []) => {
+  if (!Array.isArray(files) || files.length === 0) {
+    return Promise.resolve();
+  }
+
+  return Promise.allSettled(
+    files.map((file) => fs.promises.unlink(file.path).catch(() => {}))
+  ).then(() => {});
+};
+
+const handleValidation = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    if (req.file) {
-      fs.promises
-        .unlink(req.file.path)
-        .catch(() => {});
-    }
+    const uploadedFiles = Array.isArray(req.files) ? req.files : req.file ? [req.file] : [];
+    await cleanupUploadedFiles(uploadedFiles);
     return res.status(422).json({ errors: errors.array() });
   }
   next();
@@ -177,7 +192,7 @@ const moveDocumentToHierarchy = async ({ filePath, year, merchantName, month }) 
 
 app.post(
   '/api/documents',
-  upload.single('file'),
+  upload.array('files', 20),
   body('notes').optional({ nullable: true }).isString().trim().isLength({ max: 2000 }),
   body('tags').optional().custom(parseTags),
   body('year')
@@ -206,48 +221,53 @@ app.post(
   handleValidation,
   async (req, res, next) => {
     try {
-      if (!req.file) {
-        return res.status(400).json({ message: 'A document file is required.' });
+      const files = Array.isArray(req.files) ? req.files : [];
+
+      if (files.length === 0) {
+        return res.status(400).json({ message: 'At least one document file is required.' });
       }
 
       const yearValue = Number(req.body.year);
       const merchantValue = req.body.merchant.trim();
       const monthValue = req.body.month;
 
-      const hierarchicalPath = await moveDocumentToHierarchy({
-        filePath: req.file.path,
-        year: yearValue,
-        merchantName: merchantValue,
-        month: monthValue,
-      });
+      const documents = [];
 
-      req.file.path = hierarchicalPath;
+      for (const file of files) {
+        const hierarchicalPath = await moveDocumentToHierarchy({
+          filePath: file.path,
+          year: yearValue,
+          merchantName: merchantValue,
+          month: monthValue,
+        });
 
-      const relativeStoragePath = path
-        .relative(__dirname, hierarchicalPath)
-        .split(path.sep)
-        .join('/');
+        file.path = hierarchicalPath;
 
-      const document = await Document.create({
-        originalName: req.file.originalname,
-        storedName: req.file.filename,
-        storagePath: relativeStoragePath,
-        mimeType: req.file.mimetype,
-        size: req.file.size,
-        tags: req.parsedTags || [],
-        notes: req.body.notes,
-        year: yearValue,
-        merchantName: merchantValue,
-        month: monthValue,
-      });
+        const relativeStoragePath = path
+          .relative(__dirname, hierarchicalPath)
+          .split(path.sep)
+          .join('/');
 
-      return res.status(201).json(document);
-    } catch (error) {
-      if (req.file) {
-        fs.promises
-          .unlink(req.file.path)
-          .catch(() => {});
+        const document = await Document.create({
+          originalName: file.originalname,
+          storedName: file.filename,
+          storagePath: relativeStoragePath,
+          mimeType: file.mimetype,
+          size: file.size,
+          tags: req.parsedTags || [],
+          notes: req.body.notes,
+          year: yearValue,
+          merchantName: merchantValue,
+          month: monthValue,
+        });
+
+        documents.push(document);
       }
+
+      return res.status(201).json({ documents });
+    } catch (error) {
+      const files = Array.isArray(req.files) ? req.files : req.file ? [req.file] : [];
+      await cleanupUploadedFiles(files);
       next(error);
     }
   }
@@ -574,11 +594,8 @@ app.use((req, res, next) => {
 app.use((err, req, res, _next) => {
   console.error(err);
 
-  if (req.file) {
-    fs.promises
-      .unlink(req.file.path)
-      .catch(() => {});
-  }
+  const uploadedFiles = Array.isArray(req.files) ? req.files : req.file ? [req.file] : [];
+  cleanupUploadedFiles(uploadedFiles);
 
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ message: err.message });

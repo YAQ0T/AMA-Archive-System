@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../services/api'
 import { useArchiveContext } from '../context/ArchiveContext'
 import { DEFAULT_TAG_NAMES, MONTHS } from '../constants/archive'
@@ -8,7 +8,7 @@ const createInitialTags = () => DEFAULT_TAG_NAMES.map((name) => createTag(name))
 
 export const Upload = () => {
   const { refresh } = useArchiveContext()
-  const [file, setFile] = useState(null)
+  const [files, setFiles] = useState([])
   const [tags, setTags] = useState(() => createInitialTags())
   const [notes, setNotes] = useState('')
   const [year, setYear] = useState(() => String(new Date().getFullYear()))
@@ -16,6 +16,7 @@ export const Upload = () => {
   const [month, setMonth] = useState(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
   const [progress, setProgress] = useState(null)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
+  const fileInputRef = useRef(null)
 
   const hasInvalidTag = useMemo(() => tags.some((tag) => !tag.name || tag.price === ''), [tags])
 
@@ -25,22 +26,27 @@ export const Upload = () => {
   }, [year, merchant, month])
 
   const isUploadDisabled = useMemo(
-    () => invalidMetadata || hasInvalidTag || !file || status.type === 'loading',
-    [invalidMetadata, hasInvalidTag, file, status.type],
+    () => invalidMetadata || hasInvalidTag || files.length === 0 || status.type === 'loading',
+    [invalidMetadata, hasInvalidTag, files.length, status.type],
   )
 
   const resetMetadata = () => {
+    setFiles([])
     setTags(createInitialTags())
     setNotes('')
     setYear(() => String(new Date().getFullYear()))
     setMerchant('')
     setMonth(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   const handleFileChange = (event) => {
-    const selected = event.target.files?.[0]
-    if (!selected) {
-      setFile(null)
+    const selectedFiles = Array.from(event.target.files ?? [])
+
+    if (!selectedFiles.length) {
+      setFiles([])
       return
     }
 
@@ -48,15 +54,25 @@ export const Upload = () => {
       'application/pdf',
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/jpeg',
+      'image/png',
     ]
-    if (!allowedTypes.includes(selected.type)) {
-      setStatus({ type: 'error', message: 'Only PDF and Word documents are allowed.' })
-      setFile(null)
-      event.target.value = ''
+
+    const invalidFiles = selectedFiles.filter((file) => !allowedTypes.includes(file.type))
+
+    if (invalidFiles.length > 0) {
+      setStatus({
+        type: 'error',
+        message: 'Only PDF, Word, or image files (JPEG, PNG) are allowed.',
+      })
+      setFiles([])
+      if (event.target) {
+        event.target.value = ''
+      }
       return
     }
 
-    setFile(selected)
+    setFiles(selectedFiles)
     setProgress(null)
     setStatus({ type: 'idle', message: '' })
   }
@@ -75,7 +91,7 @@ export const Upload = () => {
 
   const submitUpload = async () => {
     if (isUploadDisabled) {
-      setStatus({ type: 'error', message: 'Please select a file and complete all metadata fields.' })
+      setStatus({ type: 'error', message: 'Please select at least one file and complete all metadata fields.' })
       return
     }
 
@@ -87,12 +103,12 @@ export const Upload = () => {
     }
 
     setProgress(0)
-    setStatus({ type: 'loading', message: 'Uploading document…' })
+    setStatus({ type: 'loading', message: 'Uploading documents…' })
 
     try {
       await api.uploadDocument(
         {
-          file,
+          files,
           notes,
           tags: tags.map((tag) => ({
             name: tag.name,
@@ -109,11 +125,13 @@ export const Upload = () => {
         },
       )
 
-      setStatus({ type: 'success', message: 'Document uploaded successfully.' })
+      setStatus({ type: 'success', message: 'Documents uploaded successfully.' })
       setProgress(100)
-      setFile(null)
       resetMetadata()
       refresh()
+      setTimeout(() => {
+        setProgress(null)
+      }, 300)
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Upload failed. Please try again.'
       setStatus({ type: 'error', message })
@@ -135,14 +153,18 @@ export const Upload = () => {
 
       <form className="upload-form" onSubmit={handleSubmit}>
         <div className="field">
-          <label htmlFor="document-file">Document file</label>
+          <label htmlFor="document-file">Document files</label>
           <input
             id="document-file"
             type="file"
-            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ref={fileInputRef}
+            multiple
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png"
             onChange={handleFileChange}
           />
-          {file && <p className="hint">Selected: {file.name}</p>}
+          {files.length > 0 && (
+            <p className="hint">Selected: {files.map((file) => file.name).join(', ')}</p>
+          )}
         </div>
 
         <div className="field">
