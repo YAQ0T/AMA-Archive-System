@@ -43,11 +43,11 @@ All endpoints are prefixed with `/api/documents`.
 
 ### POST `/api/documents`
 
-Upload a document file with associated metadata.
+Upload document files with associated metadata.
 
 - **Content type:** `multipart/form-data`
 - **Fields:**
-  - `file` – required, PDF or Word (`.pdf`, `.doc`, `.docx`)
+  - `files` – required, one or more PDF or image files (JPEG, PNG). When multiple images are provided in the same request they are automatically combined into a single PDF before being stored. Mixing image files with other document types in one request is not supported.
   - `tags` – optional JSON array (stringified in multipart) with objects `{ "name": string, "price": number }`
   - `notes` – optional string
 - **Response:** 201 with created document metadata
