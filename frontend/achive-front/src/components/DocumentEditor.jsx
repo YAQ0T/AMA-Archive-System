@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { MONTHS } from '../constants/archive'
 
+const QUICK_TAG_PRESETS = [
+  { label: 'Cash', name: 'Cash' },
+  { label: 'Checks', name: 'Checks' },
+]
+
 const createTagRow = (tag) => ({
   name: tag?.name ?? '',
   price:
@@ -47,6 +52,10 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
 
   const addTagRow = () => {
     setTags((current) => [...current, createTagRow()])
+  }
+
+  const addQuickTag = (preset) => {
+    setTags((current) => [...current, createTagRow({ name: preset.name, price: preset.price })])
   }
 
   const removeTagRow = (index) => {
@@ -179,6 +188,28 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
           <fieldset className="tags-fieldset">
             <legend>Metadata tags (optional)</legend>
             <p className="hint">Update pricing and keyword tags if you use them. Leave empty to skip.</p>
+            <div className="tags-quick-actions" aria-label="Quick tag options">
+              {QUICK_TAG_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  type="button"
+                  className="ghost"
+                  onClick={() => addQuickTag(preset)}
+                  disabled={saving}
+                >
+                  {preset.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="ghost quick-add"
+                onClick={addTagRow}
+                disabled={saving}
+                aria-label="Add custom tag"
+              >
+                +
+              </button>
+            </div>
             {tags.length === 0 && <p className="hint">No metadata tags added.</p>}
             {tags.map((tag, index) => (
               <div key={`editor-tag-${index}`} className="tag-row">
