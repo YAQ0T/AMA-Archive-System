@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../services/api'
 import { useArchiveContext } from '../context/ArchiveContext'
-import { DEFAULT_TAG_NAMES, MONTHS } from '../constants/archive'
+import { MONTHS } from '../constants/archive'
 
 const createTag = (name = '') => ({ name, price: '' })
-const createInitialTags = () => DEFAULT_TAG_NAMES.map((name) => createTag(name))
+const createInitialTags = () => []
 
 export const Upload = () => {
   const { refresh } = useArchiveContext()
@@ -18,7 +18,29 @@ export const Upload = () => {
   const [status, setStatus] = useState({ type: 'idle', message: '' })
   const fileInputRef = useRef(null)
 
-  const hasInvalidTag = useMemo(() => tags.some((tag) => !tag.name || tag.price === ''), [tags])
+  const normalizedTags = useMemo(
+    () =>
+      tags
+        .map((tag) => ({
+          name: tag.name.trim(),
+          price: tag.price,
+        }))
+        .filter((tag) => tag.name !== '' || tag.price !== ''),
+    [tags],
+  )
+
+  const hasInvalidTag = useMemo(
+    () =>
+      normalizedTags.some((tag) => {
+        if (tag.name === '' || tag.price === '') {
+          return true
+        }
+
+        const numericPrice = Number(tag.price)
+        return Number.isNaN(numericPrice) || numericPrice < 0
+      }),
+    [normalizedTags],
+  )
 
   const invalidMetadata = useMemo(() => {
     const trimmedMerchant = merchant.trim()
@@ -91,7 +113,10 @@ export const Upload = () => {
 
   const submitUpload = async () => {
     if (isUploadDisabled) {
-      setStatus({ type: 'error', message: 'Please select at least one file and complete all metadata fields.' })
+      setStatus({
+        type: 'error',
+        message: 'Please select at least one file and complete the required fields.',
+      })
       return
     }
 
@@ -110,7 +135,7 @@ export const Upload = () => {
         {
           files,
           notes,
-          tags: tags.map((tag) => ({
+          tags: normalizedTags.map((tag) => ({
             name: tag.name,
             price: Number(tag.price),
           })),
@@ -220,8 +245,11 @@ export const Upload = () => {
         </div>
 
         <fieldset className="tags-fieldset">
-          <legend>Metadata tags</legend>
-          <p className="hint">Provide at least one tag to describe pricing and search keywords.</p>
+          <legend>Metadata tags (optional)</legend>
+          <p className="hint">Add pricing or keyword tags if you need them. You can leave this empty.</p>
+          {tags.length === 0 && (
+            <p className="hint">No metadata tags added.</p>
+          )}
           {tags.map((tag, index) => (
             <div key={index} className="tag-row">
               <div className="field">
@@ -229,7 +257,6 @@ export const Upload = () => {
                 <input
                   id={`tag-name-${index}`}
                   type="text"
-                  required
                   value={tag.name}
                   onChange={(event) => updateTag(index, { name: event.target.value })}
                 />
@@ -241,20 +268,20 @@ export const Upload = () => {
                   type="number"
                   min="0"
                   step="0.01"
-                  required
                   value={tag.price}
                   onChange={(event) => updateTag(index, { price: event.target.value })}
                 />
+                {tag.price !== '' && Number(tag.price) === 0 && (
+                  <p className="hint warning" role="alert">Price is currently set to 0.</p>
+                )}
               </div>
-              {tags.length > 1 && (
-                <button type="button" className="ghost" onClick={() => removeTag(index)}>
-                  Remove
-                </button>
-              )}
+              <button type="button" className="ghost" onClick={() => removeTag(index)}>
+                Remove
+              </button>
             </div>
           ))}
           <button type="button" className="secondary" onClick={addTag}>
-            Add another tag
+            Add tag
           </button>
         </fieldset>
 

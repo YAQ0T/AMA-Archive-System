@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { DEFAULT_TAG_NAMES, MONTHS } from '../constants/archive'
+import { MONTHS } from '../constants/archive'
 
 const createTagRow = (tag) => ({
   name: tag?.name ?? '',
@@ -9,7 +9,7 @@ const createTagRow = (tag) => ({
       : '',
 })
 
-const createInitialTags = () => DEFAULT_TAG_NAMES.map((name) => createTagRow({ name }))
+const createInitialTags = () => []
 
 export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, error }) => {
   const [notes, setNotes] = useState('')
@@ -28,10 +28,7 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
     setYear(document.year ? String(document.year) : '')
     setMerchant(document.merchantName ?? '')
     setMonth(document.month && MONTHS.includes(document.month) ? document.month : MONTHS[0])
-    const sourceTags =
-      document.tags && document.tags.length
-        ? document.tags
-        : DEFAULT_TAG_NAMES.map((name) => ({ name, price: '' }))
+    const sourceTags = Array.isArray(document.tags) ? document.tags : []
     setTags(sourceTags.map(createTagRow))
     setFormError('')
   }, [document, open])
@@ -53,10 +50,7 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
   }
 
   const removeTagRow = (index) => {
-    setTags((current) => {
-      const updated = current.filter((_, tagIndex) => tagIndex !== index)
-      return updated.length ? updated : createInitialTags()
-    })
+    setTags((current) => current.filter((_, tagIndex) => tagIndex !== index))
   }
 
   const monthOptions = useMemo(() => MONTHS, [])
@@ -183,8 +177,9 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
           </div>
 
           <fieldset className="tags-fieldset">
-            <legend>Metadata tags</legend>
-            <p className="hint">Keep tags up to date to ensure pricing summaries stay accurate.</p>
+            <legend>Metadata tags (optional)</legend>
+            <p className="hint">Update pricing and keyword tags if you use them. Leave empty to skip.</p>
+            {tags.length === 0 && <p className="hint">No metadata tags added.</p>}
             {tags.map((tag, index) => (
               <div key={`editor-tag-${index}`} className="tag-row">
                 <div className="field">
@@ -206,6 +201,9 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
                     value={tag.price}
                     onChange={(event) => handleTagChange(index, { price: event.target.value })}
                   />
+                  {tag.price !== '' && Number(tag.price) === 0 && (
+                    <p className="hint warning" role="alert">Price is currently set to 0.</p>
+                  )}
                 </div>
                 <button type="button" className="ghost" onClick={() => removeTagRow(index)} disabled={saving}>
                   Remove
