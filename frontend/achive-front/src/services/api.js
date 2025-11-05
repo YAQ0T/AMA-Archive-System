@@ -99,7 +99,12 @@ const uploadDocument = (payload, { onProgress } = {}) =>
       };
 
       const formData = new FormData();
-      formData.append('file', payload.file);
+
+      if (payload.files?.length) {
+        payload.files.forEach((file) => {
+          formData.append('files', file);
+        });
+      }
 
       if (payload.notes) {
         formData.append('notes', payload.notes);
