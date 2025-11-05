@@ -12,7 +12,7 @@ const formatDate = (value) => {
   return date.toLocaleString()
 }
 
-export const ArchiveTable = ({ archives, loading }) => {
+export const ArchiveTable = ({ archives, loading, onEdit }) => {
   const emptyState = useMemo(() => {
     if (loading) {
       return 'Loading documents…'
@@ -83,6 +83,11 @@ export const ArchiveTable = ({ archives, loading }) => {
                 <td data-label="Total price">${aggregatedPrice?.toFixed(2) || '0.00'}</td>
                 <td data-label="Uploaded">{formatDate(document.createdAt)}</td>
                 <td data-label="Actions" className="actions table-actions">
+                  {typeof onEdit === 'function' && (
+                    <button type="button" className="link" onClick={() => onEdit(document)}>
+                      Edit
+                    </button>
+                  )}
                   <button type="button" className="link" onClick={() => handlePreview(document)}>
                     Preview
                   </button>

@@ -2,17 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { ArchiveProvider } from './context/ArchiveContext'
 import { Upload } from './pages/Upload'
-import { Archives } from './pages/Archives'
 import { Search } from './pages/Search'
 
 const ROUTES = {
   '#/upload': {
     title: 'Upload',
     element: <Upload />,
-  },
-  '#/archives': {
-    title: 'Archives',
-    element: <Archives />,
   },
   '#/search': {
     title: 'Search',

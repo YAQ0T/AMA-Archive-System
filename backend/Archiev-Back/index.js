@@ -454,27 +454,110 @@ app.patch(
     param('id').isMongoId(),
     body('notes').optional({ nullable: true }).isString().trim().isLength({ max: 2000 }),
     body('tags').optional().custom(parseTags),
+    body('year')
+      .optional({ nullable: true })
+      .isInt({ min: 1900, max: 9999 })
+      .toInt(),
+    body('merchant')
+      .optional({ nullable: true })
+      .isString()
+      .trim()
+      .isLength({ min: 1, max: 200 })
+      .withMessage('Merchant name must be between 1 and 200 characters.'),
+    body('month')
+      .optional({ nullable: true })
+      .isString()
+      .trim()
+      .isIn(MONTHS)
+      .withMessage(`Month must be one of: ${MONTHS.join(', ')}`),
   ],
   handleValidation,
   async (req, res, next) => {
     try {
-      const updates = {};
-
-      if (req.body.notes !== undefined) {
-        updates.notes = req.body.notes;
-      }
-
-      if (req.parsedTags !== undefined) {
-        updates.tags = req.parsedTags;
-      }
-
-      const document = await Document.findByIdAndUpdate(req.params.id, updates, {
-        new: true,
-        runValidators: true,
-      });
+      const document = await Document.findById(req.params.id);
 
       if (!document) {
         return res.status(404).json({ message: 'Document not found.' });
+      }
+
+      const originalYear = document.year;
+      const originalMerchant = document.merchantName;
+      const originalMonth = document.month;
+      const originalAbsolutePath = path.resolve(__dirname, document.storagePath);
+
+      const nextYear =
+        req.body.year !== undefined && req.body.year !== null ? Number(req.body.year) : originalYear;
+      const nextMerchant =
+        req.body.merchant !== undefined && req.body.merchant !== null
+          ? req.body.merchant.trim()
+          : originalMerchant;
+      const nextMonth =
+        req.body.month !== undefined && req.body.month !== null ? req.body.month : originalMonth;
+
+      const shouldRelocate =
+        (nextYear !== undefined && nextYear !== originalYear) ||
+        (nextMerchant !== undefined && nextMerchant !== originalMerchant) ||
+        (nextMonth !== undefined && nextMonth !== originalMonth);
+
+      if (req.body.notes !== undefined) {
+        document.notes = req.body.notes;
+      }
+
+      if (req.parsedTags !== undefined) {
+        document.tags = req.parsedTags;
+      }
+
+      if (req.body.year !== undefined && req.body.year !== null) {
+        document.year = nextYear;
+      }
+
+      if (req.body.merchant !== undefined && req.body.merchant !== null) {
+        document.merchantName = nextMerchant;
+      }
+
+      if (req.body.month !== undefined && req.body.month !== null) {
+        document.month = nextMonth;
+      }
+
+      let relocationResult = null;
+
+      if (shouldRelocate) {
+        try {
+          const relocatedPath = await moveDocumentToHierarchy({
+            filePath: originalAbsolutePath,
+            year: nextYear,
+            merchantName: nextMerchant,
+            month: nextMonth,
+          });
+
+          relocationResult = {
+            originalAbsolutePath,
+            relocatedAbsolutePath: relocatedPath,
+          };
+
+          const relativeStoragePath = path
+            .relative(__dirname, relocatedPath)
+            .split(path.sep)
+            .join('/');
+          document.storagePath = relativeStoragePath;
+        } catch (error) {
+          return next(error);
+        }
+      }
+
+      try {
+        await document.save();
+      } catch (error) {
+        if (relocationResult) {
+          const { originalAbsolutePath: originalPath, relocatedAbsolutePath: relocatedPath } = relocationResult;
+          try {
+            await fs.promises.mkdir(path.dirname(originalPath), { recursive: true });
+            await fs.promises.rename(relocatedPath, originalPath);
+          } catch (restoreError) {
+            console.error('Failed to restore document after update error', restoreError);
+          }
+        }
+        throw error;
       }
 
       res.json(document);
