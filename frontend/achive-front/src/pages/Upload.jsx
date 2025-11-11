@@ -12,7 +12,7 @@ const createTag = (name = '') => ({ name, price: '' })
 const createInitialTags = () => []
 
 export const Upload = () => {
-  const { refresh } = useArchiveContext()
+  const { refresh, hierarchy } = useArchiveContext()
   const [files, setFiles] = useState([])
   const [tags, setTags] = useState(() => createInitialTags())
   const [notes, setNotes] = useState('')
@@ -22,6 +22,23 @@ export const Upload = () => {
   const [progress, setProgress] = useState(null)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
   const fileInputRef = useRef(null)
+
+  const merchantOptions = useMemo(() => {
+    const years = hierarchy?.years ?? []
+    const names = new Set()
+
+    years.forEach((yearEntry) => {
+      const merchants = yearEntry?.merchants ?? []
+      merchants.forEach((merchantEntry) => {
+        const name = merchantEntry?.name?.trim()
+        if (name) {
+          names.add(name)
+        }
+      })
+    })
+
+    return Array.from(names).sort((a, b) => a.localeCompare(b))
+  }, [hierarchy])
 
   const normalizedTags = useMemo(
     () =>
@@ -232,9 +249,17 @@ export const Upload = () => {
               type="text"
               value={merchant}
               onChange={(event) => setMerchant(event.target.value)}
+              list={merchantOptions.length > 0 ? 'document-merchant-options' : undefined}
               placeholder="e.g. ACME Trading Co."
               required
             />
+            {merchantOptions.length > 0 && (
+              <datalist id="document-merchant-options">
+                {merchantOptions.map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+            )}
           </div>
           <div className="field">
             <label htmlFor="document-month">Month</label>
