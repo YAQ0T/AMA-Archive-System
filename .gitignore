@@ -42,3 +42,6 @@ coverage/
 
 # Miscellaneous
 *.tsbuildinfo
+
+# Uploads
+backend/Archiev-Back/uploads/
