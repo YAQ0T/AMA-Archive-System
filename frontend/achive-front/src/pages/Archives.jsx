@@ -4,14 +4,28 @@ import { ArchiveTable } from '../components/ArchiveTable'
 import { useArchiveContext } from '../context/ArchiveContext'
 
 export const Archives = () => {
-  const { archives, filters, updateFilters, loading, error, changePage, pagination, hasMore, refresh, hierarchy } =
+  const {
+    archives,
+    filters,
+    updateFilters,
+    loading,
+    error,
+    changePage,
+    pagination,
+    hasMore,
+    refresh,
+    hierarchy,
+    totalCount,
+  } =
     useArchiveContext()
 
   const pageSummary = useMemo(() => {
     const from = (pagination.page - 1) * pagination.pageSize + 1
     const to = from + Math.max(archives.length - 1, 0)
-    return `Showing ${archives.length ? `${from}-${to}` : '0'} documents`
-  }, [archives.length, pagination.page, pagination.pageSize])
+    const range = archives.length ? `${from}-${to}` : '0'
+    const totalLabel = typeof totalCount === 'number' ? ` of ${totalCount}` : ''
+    return `Showing ${range}${totalLabel} documents`
+  }, [archives.length, pagination.page, pagination.pageSize, totalCount])
 
   return (
     <section className="stack">
@@ -31,7 +45,7 @@ export const Archives = () => {
             Page {pagination.page}
             <small>{pageSummary}</small>
           </span>
-          <button type="button" onClick={() => changePage(pagination.page + 1)} disabled={!hasMore && archives.length < pagination.pageSize}>
+          <button type="button" onClick={() => changePage(pagination.page + 1)} disabled={!hasMore}>
             Next
           </button>
         </div>
@@ -54,4 +68,3 @@ export const Archives = () => {
     </section>
   )
 }
-

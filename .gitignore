@@ -8,7 +8,12 @@ frontend/dist/
 **/build/
 
 # Environment files
+.env
+.env.*
+.envrc
+.envrc.*
 *.env
+*.env.*
 *.env.local
 
 # Logs
@@ -21,6 +26,15 @@ pnpm-debug.log*
 .vscode/
 .idea/
 .DS_Store
+
+# Hidden OS files
+.AppleDouble
+.LSOverride
+._*
+Icon?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
 # Coverage directories
 coverage/

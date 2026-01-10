@@ -438,13 +438,25 @@ app.get(
     query('month').optional().isIn(MONTHS),
     query('limit').optional().isInt({ min: 1, max: 100 }),
     query('skip').optional().isInt({ min: 0 }),
+    query('includeTotal').optional().isBoolean().toBoolean(),
   ],
   handleValidation,
   async (req, res, next) => {
     try {
-      const { name, price, year, merchant, month, limit = 50, skip = 0 } = req.query;
+      const {
+        name,
+        price,
+        year,
+        merchant,
+        month,
+        limit = 50,
+        skip = 0,
+        includeTotal = false,
+      } = req.query;
 
       const filters = {};
+      const limitValue = Number(limit);
+      const skipValue = Number(skip);
 
       if (name) {
         const regex = new RegExp(name, 'i');
@@ -467,10 +479,19 @@ app.get(
         filters.month = new RegExp(`^${escapeRegExp(month)}$`, 'i');
       }
 
-      const documents = await Document.find(filters)
+      const documentQuery = Document.find(filters)
         .sort({ createdAt: -1 })
-        .skip(Number(skip))
-        .limit(Number(limit));
+        .skip(skipValue)
+        .limit(limitValue);
+
+      const [documents, total] = await Promise.all([
+        documentQuery,
+        includeTotal ? Document.countDocuments(filters) : Promise.resolve(null),
+      ]);
+
+      if (includeTotal) {
+        return res.json({ documents, total });
+      }
 
       res.json(documents);
     } catch (error) {

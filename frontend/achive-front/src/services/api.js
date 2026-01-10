@@ -132,7 +132,9 @@ const uploadDocument = (payload, { onProgress } = {}) =>
     }
   });
 
-const listDocuments = async ({ name, price, year, merchant, month, limit = 10, skip = 0 } = {}) => {
+const listDocuments = async (
+  { name, price, year, merchant, month, limit = 10, skip = 0, includeTotal } = {},
+) => {
   const query = buildQueryString({
     name,
     price,
@@ -141,6 +143,7 @@ const listDocuments = async ({ name, price, year, merchant, month, limit = 10, s
     month,
     limit,
     skip,
+    includeTotal,
   });
   return request(`/api/documents${query}`);
 };
@@ -227,4 +230,3 @@ export const api = {
 };
 
 export { ApiError }
-

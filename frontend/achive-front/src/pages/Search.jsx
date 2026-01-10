@@ -22,8 +22,20 @@ const buildStats = (archives) => {
 }
 
 export const Search = () => {
-  const { archives, filters, updateFilters, loading, error, refresh, hierarchy, editDocument } =
-    useArchiveContext()
+  const {
+    archives,
+    filters,
+    updateFilters,
+    loading,
+    error,
+    refresh,
+    hierarchy,
+    editDocument,
+    pagination,
+    hasMore,
+    changePage,
+    totalCount,
+  } = useArchiveContext()
   const [searchTerm, setSearchTerm] = useState(filters.name)
   const [editorState, setEditorState] = useState({ open: false, document: null })
   const [editorError, setEditorError] = useState('')
@@ -34,6 +46,14 @@ export const Search = () => {
   }, [filters.name])
 
   const stats = useMemo(() => buildStats(archives), [archives])
+  const documentCount = typeof totalCount === 'number' ? totalCount : stats.documents
+  const pageSummary = useMemo(() => {
+    const from = (pagination.page - 1) * pagination.pageSize + 1
+    const to = from + Math.max(archives.length - 1, 0)
+    const range = archives.length ? `${from}-${to}` : '0'
+    const totalLabel = typeof totalCount === 'number' ? ` of ${totalCount}` : ''
+    return `Showing ${range}${totalLabel} documents`
+  }, [archives.length, pagination.page, pagination.pageSize, totalCount])
 
   const applySearch = (event) => {
     event.preventDefault()
@@ -122,7 +142,7 @@ export const Search = () => {
       <section className="card metrics" aria-label="Result summary">
         <div>
           <span className="metric-label">Documents</span>
-          <strong className="metric-value">{stats.documents}</strong>
+          <strong className="metric-value">{documentCount}</strong>
         </div>
         <div>
           <span className="metric-label">Tags</span>
@@ -133,6 +153,19 @@ export const Search = () => {
           <strong className="metric-value">${stats.value.toFixed(2)}</strong>
         </div>
       </section>
+
+      <div className="pagination">
+        <button type="button" onClick={() => changePage(pagination.page - 1)} disabled={pagination.page === 1}>
+          Previous
+        </button>
+        <span>
+          Page {pagination.page}
+          <small>{pageSummary}</small>
+        </span>
+        <button type="button" onClick={() => changePage(pagination.page + 1)} disabled={!hasMore}>
+          Next
+        </button>
+      </div>
 
       {error && (
         <p className="status error" role="alert">
@@ -153,4 +186,3 @@ export const Search = () => {
     </section>
   )
 }
-

@@ -51,6 +51,7 @@ export const ArchiveProvider = ({ children }) => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [hasMore, setHasMore] = useState(false)
+  const [totalCount, setTotalCount] = useState(null)
   const [hierarchy, setHierarchy] = useState({ years: [] })
   const cacheRef = useRef(new Map())
 
@@ -88,6 +89,7 @@ export const ArchiveProvider = ({ children }) => {
         const cached = cacheRef.current.get(cacheKey)
         setArchives(cached.items)
         setHasMore(cached.hasMore)
+        setTotalCount(cached.total ?? null)
         return cached.items
       }
 
@@ -103,7 +105,7 @@ export const ArchiveProvider = ({ children }) => {
             ? resolvedFilters.minPrice
             : undefined
 
-        const documents = await api.listDocuments({
+        const response = await api.listDocuments({
           name: resolvedFilters.name || undefined,
           price: apiPrice || undefined,
           year: resolvedFilters.year || undefined,
@@ -111,7 +113,13 @@ export const ArchiveProvider = ({ children }) => {
           month: resolvedFilters.month || undefined,
           limit: resolvedPagination.pageSize,
           skip,
+          includeTotal: true,
         })
+
+        const documents = Array.isArray(response) ? response : response?.documents || []
+        const totalValue = Array.isArray(response) ? Number.NaN : Number(response?.total)
+        const hasTotal = Number.isFinite(totalValue)
+        const total = hasTotal ? totalValue : documents.length
 
         const filtered = documents.filter((document) => {
           if (!document.tags?.length) {
@@ -129,12 +137,15 @@ export const ArchiveProvider = ({ children }) => {
           return matchesRequiredTags
         })
 
-        const hasMorePages = documents.length === resolvedPagination.pageSize
+        const hasMorePages = hasTotal
+          ? skip + documents.length < total
+          : documents.length === resolvedPagination.pageSize
 
         setArchives(filtered)
         setHasMore(hasMorePages)
+        setTotalCount(total)
 
-        cacheRef.current.set(cacheKey, { items: filtered, hasMore: hasMorePages })
+        cacheRef.current.set(cacheKey, { items: filtered, hasMore: hasMorePages, total })
 
         return filtered
       } catch (apiError) {
@@ -142,6 +153,7 @@ export const ArchiveProvider = ({ children }) => {
         setError(apiError.message || 'Unable to load archives right now.')
         setArchives([])
         setHasMore(false)
+        setTotalCount(null)
         throw apiError
       } finally {
         setLoading(false)
@@ -234,6 +246,7 @@ export const ArchiveProvider = ({ children }) => {
       loading,
       error,
       hasMore,
+      totalCount,
       updateFilters,
       changePage,
       refresh,
@@ -251,6 +264,7 @@ export const ArchiveProvider = ({ children }) => {
       loading,
       pagination,
       refresh,
+      totalCount,
       updateFilters,
       loadHierarchy,
       editDocument,
@@ -267,4 +281,3 @@ export const useArchiveContext = () => {
   }
   return context
 }
-
