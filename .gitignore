@@ -45,3 +45,7 @@ coverage/
 
 # Uploads
 backend/Archiev-Back/uploads/
+
+# Local runtime artifacts
+.runtime/
+frontend/achive-front/dist/

@@ -49,6 +49,14 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+const frontendDistDir = process.env.FRONTEND_DIST_DIR
+  ? path.isAbsolute(process.env.FRONTEND_DIST_DIR)
+    ? process.env.FRONTEND_DIST_DIR
+    : path.resolve(__dirname, process.env.FRONTEND_DIST_DIR)
+  : path.resolve(__dirname, '../../frontend/achive-front/dist');
+const frontendEntryPath = path.join(frontendDistDir, 'index.html');
+const hasFrontendBuild = fs.existsSync(frontendEntryPath);
+
 app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -440,6 +448,13 @@ const moveDocumentToHierarchy = async ({ filePath, year, merchantName, month }) 
 
   return destination;
 };
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'archive-backend',
+  });
+});
 
 const removeFileIfExists = async (absolutePath) => {
   try {
@@ -1010,6 +1025,13 @@ app.patch(
     }
   }
 );
+
+if (hasFrontendBuild) {
+  app.use(express.static(frontendDistDir));
+  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+    res.sendFile(frontendEntryPath);
+  });
+}
 
 app.use((req, res, next) => {
   res.status(404).json({ message: 'Endpoint not found.' });

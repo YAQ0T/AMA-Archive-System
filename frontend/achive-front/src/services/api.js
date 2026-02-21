@@ -3,6 +3,19 @@ const BASE_URL = (() => {
   if (envUrl) {
     return envUrl.replace(/\/$/, '');
   }
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname, port } = window.location;
+
+    // Vite dev/preview ports still need the backend on 4000.
+    if (port === '5173' || port === '5174' || port === '4173') {
+      return `${protocol}//${hostname}:4000`;
+    }
+
+    // In production (served by backend), use the exact current origin.
+    return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
+  }
+
   return 'http://localhost:4000';
 })();
 
@@ -160,8 +173,10 @@ const listDocuments = async (
 
 const getHierarchy = () => request('/api/documents/hierarchy');
 
+const buildDocumentFileUrl = (id) => `${BASE_URL}/api/documents/${encodeURIComponent(String(id))}/file`;
+
 const fetchDocumentFile = async (id) => {
-  const response = await fetch(`${BASE_URL}/api/documents/${id}/file`);
+  const response = await fetch(buildDocumentFileUrl(id));
   if (!response.ok) {
     const message = await parseError(response);
     throw new ApiError(message, response.status);
@@ -189,15 +204,15 @@ const previewDocument = async (id, filename) => {
   if (typeof window === 'undefined') {
     return null;
   }
-  const blob = await fetchDocumentFile(id);
-  const url = URL.createObjectURL(blob);
+  const url = buildDocumentFileUrl(id);
   const previewWindow = window.open(url, '_blank');
   if (previewWindow) {
-    previewWindow.onload = () => {
+    try {
       previewWindow.document.title = filename || 'Document preview';
-    };
+    } catch {
+      // Ignore cross-origin access issues when browser opens the file viewer.
+    }
   }
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
   return true;
 };
 
@@ -205,17 +220,23 @@ const reprintDocument = async (id, filename) => {
   if (typeof window === 'undefined') {
     return null;
   }
-  const blob = await fetchDocumentFile(id);
-  const url = URL.createObjectURL(blob);
+  const url = buildDocumentFileUrl(id);
   const printWindow = window.open(url, '_blank');
   if (printWindow) {
-    printWindow.onload = () => {
-      printWindow.document.title = filename || 'Document copy';
-      printWindow.focus();
-      printWindow.print();
-    };
+    setTimeout(() => {
+      try {
+        printWindow.document.title = filename || 'Document copy';
+      } catch {
+        // Ignore cross-origin access issues when browser opens the file viewer.
+      }
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } catch {
+        // Ignore browser restrictions that block programmatic print in some cases.
+      }
+    }, 1200);
   }
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
   return true;
 };
 
