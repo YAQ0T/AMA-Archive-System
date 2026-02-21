@@ -15,6 +15,8 @@ const MONTHS = [
   'December',
 ];
 
+const INVOICE_TYPES = ['sales', 'purchases', 'tax_invoice'];
+
 const TagSchema = new mongoose.Schema(
   {
     name: {
@@ -59,6 +61,16 @@ const DocumentSchema = new mongoose.Schema(
       type: [TagSchema],
       default: [],
     },
+    amount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    invoiceType: {
+      type: String,
+      enum: INVOICE_TYPES,
+      default: 'sales',
+    },
     notes: {
       type: String,
       trim: true,
@@ -88,3 +100,4 @@ const DocumentSchema = new mongoose.Schema(
 
 module.exports = mongoose.model('Document', DocumentSchema);
 module.exports.MONTHS = MONTHS;
+module.exports.INVOICE_TYPES = INVOICE_TYPES;

@@ -13,7 +13,7 @@ const { body, query, param, validationResult } = require('express-validator');
 
 const DocumentModel = require('./models/document');
 
-const { MONTHS } = DocumentModel;
+const { MONTHS, INVOICE_TYPES } = DocumentModel;
 
 const Document = DocumentModel;
 
@@ -149,17 +149,123 @@ const parseTags = (value, { req }) => {
   return true;
 };
 
+const EASTERN_ARABIC_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+const PERSIAN_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+
+const INVOICE_TYPE_ALIASES = new Map([
+  ['sales', 'sales'],
+  ['sale', 'sales'],
+  ['مبيعات', 'sales'],
+  ['purchases', 'purchases'],
+  ['purchase', 'purchases'],
+  ['مشتريات', 'purchases'],
+  ['tax_invoice', 'tax_invoice'],
+  ['tax-invoice', 'tax_invoice'],
+  ['taxinvoice', 'tax_invoice'],
+  ['فاتورة ضريبية', 'tax_invoice'],
+  ['فاتوره ضريبيه', 'tax_invoice'],
+]);
+
+const normaliseDigits = (value) =>
+  String(value)
+    .replace(/[٠-٩]/g, (digit) => String(EASTERN_ARABIC_DIGITS.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String(PERSIAN_DIGITS.indexOf(digit)));
+
+const normaliseAmountInput = (value) =>
+  normaliseDigits(value)
+    .replace(/[٫]/g, '.')
+    .replace(/[٬،]/g, ',')
+    .replace(/\s+/g, '')
+    .trim();
+
+const parseAmount = (value, { allowUndefined = false, defaultValue = 0 } = {}) => {
+  if (value === undefined || value === null) {
+    return allowUndefined ? undefined : defaultValue;
+  }
+
+  const normalised = normaliseAmountInput(value);
+
+  if (!normalised) {
+    return defaultValue;
+  }
+
+  const numeric = Number(normalised.replace(/,/g, ''));
+
+  if (!Number.isFinite(numeric)) {
+    throw new Error('Amount must be a valid number.');
+  }
+
+  if (numeric < 0) {
+    throw new Error('Amount cannot be negative.');
+  }
+
+  return numeric;
+};
+
+const parseAmountField = (value, { req }) => {
+  req.parsedAmount = parseAmount(value, { defaultValue: 0 });
+  return true;
+};
+
+const parseAmountQueryField = (value, { req }) => {
+  req.parsedAmountQuery = parseAmount(value, { allowUndefined: true, defaultValue: undefined });
+  return true;
+};
+
+const normaliseInvoiceType = (value) => {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return undefined;
+  }
+
+  const lower = raw.toLowerCase();
+  const canonical =
+    INVOICE_TYPE_ALIASES.get(lower) ||
+    INVOICE_TYPE_ALIASES.get(lower.replace(/\s+/g, ' ')) ||
+    INVOICE_TYPE_ALIASES.get(lower.replace(/[\s_-]+/g, '_')) ||
+    null;
+
+  if (!canonical || !INVOICE_TYPES.includes(canonical)) {
+    return null;
+  }
+
+  return canonical;
+};
+
+const parseInvoiceTypeField = (value, { req }) => {
+  const parsed = normaliseInvoiceType(value);
+  if (parsed === null) {
+    throw new Error('Invoice type must be sales, purchases, or tax invoice.');
+  }
+  req.parsedInvoiceType = parsed;
+  return true;
+};
+
+const parseInvoiceTypeQueryField = (value, { req }) => {
+  const parsed = normaliseInvoiceType(value);
+  if (parsed === null) {
+    throw new Error('Invoice type filter must be sales, purchases, or tax invoice.');
+  }
+  req.parsedInvoiceTypeQuery = parsed;
+  return true;
+};
+
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const sanitizeNameSegment = (value, { fallback } = {}) => {
-  if (!value) {
+  if (value === undefined || value === null) {
     return fallback;
   }
 
-  const normalised = value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
+  const normalised = String(value)
+    .normalize('NFKC')
+    .trim()
+    .replace(/[\\/]/g, '-')
+    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
 
@@ -335,11 +441,56 @@ const moveDocumentToHierarchy = async ({ filePath, year, merchantName, month }) 
   return destination;
 };
 
+const removeFileIfExists = async (absolutePath) => {
+  try {
+    await fs.promises.unlink(absolutePath);
+    return true;
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
+};
+
+const removeEmptyDirectoriesUpwards = async (directoryPath) => {
+  const root = path.resolve(uploadsDir);
+  let current = path.resolve(directoryPath);
+
+  while (current !== root) {
+    const relative = path.relative(root, current);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      return;
+    }
+
+    let entries;
+    try {
+      entries = await fs.promises.readdir(current);
+    } catch {
+      return;
+    }
+
+    if (entries.length > 0) {
+      return;
+    }
+
+    try {
+      await fs.promises.rmdir(current);
+    } catch {
+      return;
+    }
+
+    current = path.dirname(current);
+  }
+};
+
 app.post(
   '/api/documents',
   upload.array('files', 20),
   body('notes').optional({ nullable: true }).isString().trim().isLength({ max: 2000 }),
   body('tags').optional().custom(parseTags),
+  body('amount').optional({ nullable: true }).custom(parseAmountField),
+  body('invoiceType').optional({ nullable: true }).custom(parseInvoiceTypeField),
   body('year')
     .exists()
     .withMessage('Year is required.')
@@ -378,6 +529,8 @@ app.post(
       const yearValue = Number(req.body.year);
       const merchantValue = req.body.merchant.trim();
       const monthValue = req.body.month;
+      const amountValue = req.parsedAmount !== undefined ? req.parsedAmount : 0;
+      const invoiceTypeValue = req.parsedInvoiceType || 'sales';
 
       const nameHintParts = [merchantValue, monthValue, yearValue].filter(Boolean);
       const normalisedFiles = await normaliseUploadedFiles(uploadedFiles, {
@@ -410,6 +563,8 @@ app.post(
           mimeType: file.mimetype,
           size: file.size,
           tags: req.parsedTags || [],
+          amount: amountValue,
+          invoiceType: invoiceTypeValue,
           notes: req.body.notes,
           year: yearValue,
           merchantName: merchantValue,
@@ -433,6 +588,8 @@ app.get(
   [
     query('name').optional().isString(),
     query('price').optional().isFloat(),
+    query('amount').optional().custom(parseAmountQueryField),
+    query('invoiceType').optional().custom(parseInvoiceTypeQueryField),
     query('year').optional().isInt({ min: 1900, max: 9999 }),
     query('merchant').optional().isString(),
     query('month').optional().isIn(MONTHS),
@@ -446,6 +603,8 @@ app.get(
       const {
         name,
         price,
+        amount,
+        invoiceType,
         year,
         merchant,
         month,
@@ -466,8 +625,20 @@ app.get(
           { merchantName: regex },
         ];
       }
-      if (price) {
+      if (price !== undefined) {
         filters['tags.price'] = Number(price);
+      }
+      if (req.parsedAmountQuery !== undefined) {
+        filters.$expr = {
+          $eq: [{ $ifNull: ['$amount', 0] }, req.parsedAmountQuery],
+        };
+      } else if (amount !== undefined) {
+        filters.amount = Number(amount);
+      }
+      if (req.parsedInvoiceTypeQuery) {
+        filters.invoiceType = req.parsedInvoiceTypeQuery;
+      } else if (invoiceType) {
+        filters.invoiceType = invoiceType;
       }
       if (year) {
         filters.year = Number(year);
@@ -515,6 +686,8 @@ app.get('/api/documents/hierarchy', async (_req, res, next) => {
         size: 1,
         notes: 1,
         tags: 1,
+        amount: 1,
+        invoiceType: 1,
         createdAt: 1,
         updatedAt: 1,
       }
@@ -569,6 +742,8 @@ app.get('/api/documents/hierarchy', async (_req, res, next) => {
         size: record.size,
         notes: record.notes,
         tags: record.tags || [],
+        amount: Number.isFinite(Number(record.amount)) ? Number(record.amount) : 0,
+        invoiceType: record.invoiceType || '',
         createdAt,
         updatedAt,
       });
@@ -579,7 +754,7 @@ app.get('/api/documents/hierarchy', async (_req, res, next) => {
       .map(([yearValue, merchantsMap]) => ({
         year: yearValue,
         merchants: Array.from(merchantsMap.entries())
-          .sort((a, b) => a[0].localeCompare(b[0]))
+          .sort((a, b) => a[0].localeCompare(b[0], 'ar'))
           .map(([merchantName, monthsMap]) => ({
             name: merchantName,
             months: Array.from(monthsMap.entries())
@@ -644,12 +819,48 @@ app.get(
   }
 );
 
+app.delete(
+  '/api/documents/:id',
+  [param('id').isMongoId()],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const document = await Document.findById(req.params.id);
+      if (!document) {
+        return res.status(404).json({ message: 'Document not found.' });
+      }
+
+      const absolutePath = path.resolve(__dirname, document.storagePath);
+
+      await Document.deleteOne({ _id: document._id });
+
+      try {
+        const deletedFile = await removeFileIfExists(absolutePath);
+        if (deletedFile) {
+          await removeEmptyDirectoriesUpwards(path.dirname(absolutePath));
+        }
+      } catch (cleanupError) {
+        console.error('Document removed from database but file cleanup failed', cleanupError);
+      }
+
+      return res.json({
+        message: 'Document deleted successfully.',
+        id: String(document._id),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 app.patch(
   '/api/documents/:id',
   [
     param('id').isMongoId(),
     body('notes').optional({ nullable: true }).isString().trim().isLength({ max: 2000 }),
     body('tags').optional().custom(parseTags),
+    body('amount').optional({ nullable: true }).custom(parseAmountField),
+    body('invoiceType').optional({ nullable: true }).custom(parseInvoiceTypeField),
     body('year')
       .optional({ nullable: true })
       .isInt({ min: 1900, max: 9999 })
@@ -701,6 +912,14 @@ app.patch(
 
       if (req.parsedTags !== undefined) {
         document.tags = req.parsedTags;
+      }
+
+      if (req.parsedAmount !== undefined) {
+        document.amount = req.parsedAmount;
+      }
+
+      if (req.parsedInvoiceType !== undefined) {
+        document.invoiceType = req.parsedInvoiceType;
       }
 
       if (req.body.year !== undefined && req.body.year !== null) {

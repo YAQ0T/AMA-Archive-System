@@ -114,6 +114,14 @@ const uploadDocument = (payload, { onProgress } = {}) =>
         formData.append('tags', JSON.stringify(payload.tags));
       }
 
+      if (payload.amount !== undefined && payload.amount !== null) {
+        formData.append('amount', String(payload.amount));
+      }
+
+      if (payload.invoiceType) {
+        formData.append('invoiceType', payload.invoiceType);
+      }
+
       if (payload.year) {
         formData.append('year', String(payload.year));
       }
@@ -133,11 +141,13 @@ const uploadDocument = (payload, { onProgress } = {}) =>
   });
 
 const listDocuments = async (
-  { name, price, year, merchant, month, limit = 10, skip = 0, includeTotal } = {},
+  { name, price, amount, invoiceType, year, merchant, month, limit = 10, skip = 0, includeTotal } = {},
 ) => {
   const query = buildQueryString({
     name,
     price,
+    amount,
+    invoiceType,
     year,
     merchant,
     month,
@@ -218,6 +228,11 @@ const updateDocument = async (id, payload) =>
     body: JSON.stringify(payload),
   });
 
+const deleteDocument = async (id) =>
+  request(`/api/documents/${id}`, {
+    method: 'DELETE',
+  });
+
 export const api = {
   uploadDocument,
   listDocuments,
@@ -226,6 +241,7 @@ export const api = {
   reprintDocument,
   getHierarchy,
   updateDocument,
+  deleteDocument,
   BASE_URL,
 };
 

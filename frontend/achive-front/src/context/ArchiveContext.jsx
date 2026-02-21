@@ -1,12 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../services/api'
+import { normaliseAmountInput, resolveDocumentAmount } from '../utils/amount'
 
 const DEFAULT_FILTERS = {
   name: '',
-  minPrice: '',
-  maxPrice: '',
-  tags: [],
+  amount: '',
+  invoiceType: '',
   year: '',
   merchant: '',
   month: '',
@@ -17,32 +17,17 @@ const DEFAULT_PAGINATION = {
   pageSize: 10,
 }
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+
 const ArchiveContext = createContext(null)
 
-const normaliseTags = (tags) =>
-  tags
-    .map((tag) => tag?.trim())
-    .filter((tag, index, array) => tag && array.indexOf(tag) === index)
+const normaliseAmountFilter = (value) => normaliseAmountInput(value ?? '')
 
-const withinPriceRange = (price, minPrice, maxPrice) => {
-  if (minPrice !== '' && Number.isFinite(Number(minPrice)) && Number(price) < Number(minPrice)) {
-    return false
-  }
-  if (maxPrice !== '' && Number.isFinite(Number(maxPrice)) && Number(price) > Number(maxPrice)) {
-    return false
-  }
-  return true
-}
-
-const matchesTags = (documentTags, requiredTags) => {
-  if (!requiredTags.length) {
-    return true
-  }
-  const lowerTags = requiredTags.map((tag) => tag.toLowerCase())
-  return lowerTags.every((tag) =>
-    documentTags.some((documentTag) => documentTag.name?.toLowerCase().includes(tag)),
-  )
-}
+const hydrateDocument = (document) => ({
+  ...document,
+  amount: resolveDocumentAmount(document),
+  invoiceType: document?.invoiceType || '',
+})
 
 export const ArchiveProvider = ({ children }) => {
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
@@ -54,6 +39,7 @@ export const ArchiveProvider = ({ children }) => {
   const [totalCount, setTotalCount] = useState(null)
   const [hierarchy, setHierarchy] = useState({ years: [] })
   const cacheRef = useRef(new Map())
+  const hasBootstrappedRef = useRef(false)
 
   const serialise = useCallback((value) => JSON.stringify(value), [])
 
@@ -75,7 +61,7 @@ export const ArchiveProvider = ({ children }) => {
         filters: {
           ...DEFAULT_FILTERS,
           ...nextFilters,
-          tags: normaliseTags(nextFilters.tags || []),
+          amount: normaliseAmountFilter(nextFilters.amount),
         },
         pagination: {
           ...DEFAULT_PAGINATION,
@@ -100,14 +86,10 @@ export const ArchiveProvider = ({ children }) => {
         const { filters: resolvedFilters, pagination: resolvedPagination } = payload
         const skip = (resolvedPagination.page - 1) * resolvedPagination.pageSize
 
-        const apiPrice =
-          resolvedFilters.minPrice !== '' && resolvedFilters.minPrice === resolvedFilters.maxPrice
-            ? resolvedFilters.minPrice
-            : undefined
-
         const response = await api.listDocuments({
           name: resolvedFilters.name || undefined,
-          price: apiPrice || undefined,
+          amount: resolvedFilters.amount || undefined,
+          invoiceType: resolvedFilters.invoiceType || undefined,
           year: resolvedFilters.year || undefined,
           merchant: resolvedFilters.merchant || undefined,
           month: resolvedFilters.month || undefined,
@@ -117,37 +99,22 @@ export const ArchiveProvider = ({ children }) => {
         })
 
         const documents = Array.isArray(response) ? response : response?.documents || []
+        const hydratedDocuments = documents.map(hydrateDocument)
         const totalValue = Array.isArray(response) ? Number.NaN : Number(response?.total)
         const hasTotal = Number.isFinite(totalValue)
-        const total = hasTotal ? totalValue : documents.length
-
-        const filtered = documents.filter((document) => {
-          if (!document.tags?.length) {
-            return resolvedFilters.tags.length === 0
-          }
-
-          const matchesPrice = document.tags.some((tag) =>
-            withinPriceRange(tag.price, resolvedFilters.minPrice, resolvedFilters.maxPrice),
-          )
-          if (!matchesPrice) {
-            return false
-          }
-
-          const matchesRequiredTags = matchesTags(document.tags, resolvedFilters.tags)
-          return matchesRequiredTags
-        })
+        const total = hasTotal ? totalValue : hydratedDocuments.length
 
         const hasMorePages = hasTotal
-          ? skip + documents.length < total
+          ? resolvedPagination.page < Math.max(1, Math.ceil(total / resolvedPagination.pageSize))
           : documents.length === resolvedPagination.pageSize
 
-        setArchives(filtered)
+        setArchives(hydratedDocuments)
         setHasMore(hasMorePages)
         setTotalCount(total)
 
-        cacheRef.current.set(cacheKey, { items: filtered, hasMore: hasMorePages, total })
+        cacheRef.current.set(cacheKey, { items: hydratedDocuments, hasMore: hasMorePages, total })
 
-        return filtered
+        return hydratedDocuments
       } catch (apiError) {
         console.error(apiError)
         setError(apiError.message || 'Unable to load archives right now.')
@@ -167,7 +134,7 @@ export const ArchiveProvider = ({ children }) => {
       const merged = {
         ...filters,
         ...nextFilters,
-        tags: normaliseTags(nextFilters.tags ?? filters.tags),
+        amount: normaliseAmountFilter(nextFilters.amount ?? filters.amount),
       }
       setFilters(merged)
       const nextPagination = { ...pagination, page: 1 }
@@ -179,12 +146,29 @@ export const ArchiveProvider = ({ children }) => {
 
   const changePage = useCallback(
     async (page) => {
-      const safePage = Math.max(1, page)
+      const pageLimit =
+        typeof totalCount === 'number' ? Math.max(1, Math.ceil(totalCount / pagination.pageSize)) : Number.POSITIVE_INFINITY
+      const safePage = Math.max(1, Math.min(page, pageLimit))
       const nextPagination = { ...pagination, page: safePage }
       setPagination(nextPagination)
       await fetchArchives(filters, nextPagination)
     },
-    [fetchArchives, filters, pagination],
+    [fetchArchives, filters, pagination, totalCount],
+  )
+
+  const changePageSize = useCallback(
+    async (size) => {
+      const numeric = Number(size)
+      const safeSize = PAGE_SIZE_OPTIONS.includes(numeric) ? numeric : DEFAULT_PAGINATION.pageSize
+      const nextPagination = {
+        page: 1,
+        pageSize: safeSize,
+      }
+
+      setPagination(nextPagination)
+      await fetchArchives(filters, nextPagination, { force: true })
+    },
+    [fetchArchives, filters],
   )
 
   const refresh = useCallback(async () => {
@@ -205,6 +189,14 @@ export const ArchiveProvider = ({ children }) => {
 
       if (updates.tags !== undefined) {
         payload.tags = updates.tags
+      }
+
+      if (updates.amount !== undefined) {
+        payload.amount = updates.amount
+      }
+
+      if (updates.invoiceType !== undefined) {
+        payload.invoiceType = updates.invoiceType
       }
 
       if (updates.year !== undefined) {
@@ -233,10 +225,42 @@ export const ArchiveProvider = ({ children }) => {
     [fetchArchives, filters, loadHierarchy, pagination],
   )
 
+  const deleteDocument = useCallback(
+    async (id) => {
+      await api.deleteDocument(id)
+
+      cacheRef.current.clear()
+
+      const expectedTotal =
+        typeof totalCount === 'number' ? Math.max(0, totalCount - 1) : null
+      const expectedMaxPage =
+        expectedTotal === null ? null : Math.max(1, Math.ceil(expectedTotal / pagination.pageSize))
+
+      const nextPagination =
+        expectedMaxPage !== null && pagination.page > expectedMaxPage
+          ? { ...pagination, page: expectedMaxPage }
+          : pagination
+
+      if (nextPagination !== pagination) {
+        setPagination(nextPagination)
+      }
+
+      await Promise.all([
+        fetchArchives(filters, nextPagination, { force: true }),
+        loadHierarchy(),
+      ])
+    },
+    [fetchArchives, filters, loadHierarchy, pagination, totalCount],
+  )
+
   useEffect(() => {
+    if (hasBootstrappedRef.current) {
+      return
+    }
+    hasBootstrappedRef.current = true
     fetchArchives().catch(() => {})
     loadHierarchy().catch(() => {})
-  }, [])
+  }, [fetchArchives, loadHierarchy])
 
   const value = useMemo(
     () => ({
@@ -249,10 +273,13 @@ export const ArchiveProvider = ({ children }) => {
       totalCount,
       updateFilters,
       changePage,
+      changePageSize,
       refresh,
       hierarchy,
       reloadHierarchy: loadHierarchy,
       editDocument,
+      deleteDocument,
+      pageSizeOptions: PAGE_SIZE_OPTIONS,
     }),
     [
       archives,
@@ -266,8 +293,10 @@ export const ArchiveProvider = ({ children }) => {
       refresh,
       totalCount,
       updateFilters,
+      changePageSize,
       loadHierarchy,
       editDocument,
+      deleteDocument,
     ],
   )
 

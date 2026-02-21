@@ -1,27 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MONTHS } from '../constants/archive'
-
-const QUICK_TAG_PRESETS = [
-  { label: 'Cash', name: 'Cash' },
-  { label: 'Checks', name: 'Checks' },
-]
-
-const createTagRow = (tag) => ({
-  name: tag?.name ?? '',
-  price:
-    tag?.price !== undefined && tag?.price !== null && tag?.price !== ''
-      ? String(tag.price)
-      : '',
-})
-
-const createInitialTags = () => []
+import { INVOICE_TYPES, MONTHS } from '../constants/archive'
+import { normaliseAmountInput, parseAmountInput, resolveDocumentAmount } from '../utils/amount'
 
 export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, error }) => {
   const [notes, setNotes] = useState('')
   const [year, setYear] = useState('')
   const [merchant, setMerchant] = useState('')
   const [month, setMonth] = useState(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
-  const [tags, setTags] = useState(() => createInitialTags())
+  const [invoiceType, setInvoiceType] = useState('sales')
+  const [amount, setAmount] = useState('')
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
@@ -33,8 +20,15 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
     setYear(document.year ? String(document.year) : '')
     setMerchant(document.merchantName ?? '')
     setMonth(document.month && MONTHS.includes(document.month) ? document.month : MONTHS[0])
-    const sourceTags = Array.isArray(document.tags) ? document.tags : []
-    setTags(sourceTags.map(createTagRow))
+
+    const initialInvoiceType =
+      INVOICE_TYPES.some((type) => type.value === document.invoiceType) ? document.invoiceType : 'sales'
+    setInvoiceType(initialInvoiceType)
+
+    const directAmount = Number(document.amount)
+    const resolvedAmount = Number.isFinite(directAmount) && directAmount >= 0 ? directAmount : resolveDocumentAmount(document)
+    setAmount(resolvedAmount > 0 ? String(resolvedAmount) : '')
+
     setFormError('')
   }, [document, open])
 
@@ -44,24 +38,6 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
     }
   }, [open])
 
-  const handleTagChange = (index, patch) => {
-    setTags((current) =>
-      current.map((tag, tagIndex) => (tagIndex === index ? { ...tag, ...patch } : tag)),
-    )
-  }
-
-  const addTagRow = () => {
-    setTags((current) => [...current, createTagRow()])
-  }
-
-  const addQuickTag = (preset) => {
-    setTags((current) => [...current, createTagRow({ name: preset.name, price: preset.price })])
-  }
-
-  const removeTagRow = (index) => {
-    setTags((current) => current.filter((_, tagIndex) => tagIndex !== index))
-  }
-
   const monthOptions = useMemo(() => MONTHS, [])
 
   const handleSubmit = (event) => {
@@ -70,6 +46,7 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
 
     const trimmedMerchant = merchant.trim()
     const numericYear = Number(year)
+    const numericAmount = parseAmountInput(amount, { defaultValue: 0 })
 
     if (!Number.isFinite(numericYear) || numericYear < 1900 || numericYear > 9999) {
       setFormError('Please provide a valid year between 1900 and 9999.')
@@ -77,7 +54,7 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
     }
 
     if (!trimmedMerchant) {
-      setFormError('Merchant name is required.')
+      setFormError('Customer name is required.')
       return
     }
 
@@ -86,26 +63,20 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
       return
     }
 
-    const cleanedTags = tags
-      .map((tag) => {
-        const trimmedName = tag.name.trim()
-        if (!trimmedName) {
-          return null
-        }
-        const numericPrice = Number(tag.price)
-        if (tag.price === '' || Number.isNaN(numericPrice) || numericPrice < 0) {
-          return null
-        }
-        return {
-          name: trimmedName,
-          price: numericPrice,
-        }
-      })
-      .filter(Boolean)
+    if (!invoiceType) {
+      setFormError('Please select a valid invoice type.')
+      return
+    }
+
+    if (Number.isNaN(numericAmount)) {
+      setFormError('Please provide a valid amount value.')
+      return
+    }
 
     onSubmit({
       notes,
-      tags: cleanedTags,
+      amount: numericAmount,
+      invoiceType,
       year: numericYear,
       merchant: trimmedMerchant,
       month,
@@ -123,8 +94,7 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
           <div>
             <h3 id="document-editor-title">Edit document</h3>
             <p className="section-description">
-              Update document metadata, adjust yearly assignments, or refine pricing tags. Changes are applied
-              immediately after saving.
+              Update document metadata including customer name, invoice type, and amount.
             </p>
           </div>
           <button type="button" className="ghost" onClick={onClose} disabled={saving}>
@@ -158,13 +128,14 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
               />
             </div>
             <div className="field">
-              <label htmlFor="editor-merchant">Merchant</label>
+              <label htmlFor="editor-merchant">اسم الزبون</label>
               <input
                 id="editor-merchant"
                 type="text"
                 value={merchant}
                 onChange={(event) => setMerchant(event.target.value)}
-                placeholder="e.g. ACME Trading Co."
+                placeholder="مثال: مؤسسة الأمل"
+                dir="auto"
                 required
               />
             </div>
@@ -183,68 +154,35 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
                 ))}
               </select>
             </div>
-          </div>
-
-          <fieldset className="tags-fieldset">
-            <legend>Metadata tags (optional)</legend>
-            <p className="hint">Update pricing and keyword tags if you use them. Leave empty to skip.</p>
-            <div className="tags-quick-actions" aria-label="Quick tag options">
-              {QUICK_TAG_PRESETS.map((preset) => (
-                <button
-                  key={preset.name}
-                  type="button"
-                  className="ghost"
-                  onClick={() => addQuickTag(preset)}
-                  disabled={saving}
-                >
-                  {preset.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                className="ghost quick-add"
-                onClick={addTagRow}
-                disabled={saving}
-                aria-label="Add custom tag"
+            <div className="field">
+              <label htmlFor="editor-invoice-type">نوع الفاتورة</label>
+              <select
+                id="editor-invoice-type"
+                value={invoiceType}
+                onChange={(event) => setInvoiceType(event.target.value)}
+                required
               >
-                +
-              </button>
+                {INVOICE_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
             </div>
-            {tags.length === 0 && <p className="hint">No metadata tags added.</p>}
-            {tags.map((tag, index) => (
-              <div key={`editor-tag-${index}`} className="tag-row">
-                <div className="field">
-                  <label htmlFor={`editor-tag-name-${index}`}>Name</label>
-                  <input
-                    id={`editor-tag-name-${index}`}
-                    type="text"
-                    value={tag.name}
-                    onChange={(event) => handleTagChange(index, { name: event.target.value })}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor={`editor-tag-price-${index}`}>Price</label>
-                  <input
-                    id={`editor-tag-price-${index}`}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={tag.price}
-                    onChange={(event) => handleTagChange(index, { price: event.target.value })}
-                  />
-                  {tag.price !== '' && Number(tag.price) === 0 && (
-                    <p className="hint warning" role="alert">Price is currently set to 0.</p>
-                  )}
-                </div>
-                <button type="button" className="ghost" onClick={() => removeTagRow(index)} disabled={saving}>
-                  Remove
-                </button>
-              </div>
-            ))}
-            <button type="button" className="secondary" onClick={addTagRow} disabled={saving}>
-              Add another tag
-            </button>
-          </fieldset>
+            <div className="field">
+              <label htmlFor="editor-amount">المبلغ (Amount)</label>
+              <input
+                id="editor-amount"
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onChange={(event) => setAmount(normaliseAmountInput(event.target.value))}
+                placeholder="0"
+                dir="ltr"
+              />
+              <p className="hint">Arabic digits are converted to English automatically.</p>
+            </div>
+          </div>
 
           {(formError || error) && (
             <p className="status error" role="alert">
@@ -265,4 +203,3 @@ export const DocumentEditor = ({ open, document, onClose, onSubmit, saving, erro
     </div>
   )
 }
-

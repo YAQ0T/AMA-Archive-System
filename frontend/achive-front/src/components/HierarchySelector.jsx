@@ -6,7 +6,7 @@ const getYearEntry = (hierarchyYears, year) =>
 const getMerchantEntry = (merchants, merchant) => merchants.find((entry) => entry.name === merchant)
 
 export const HierarchySelector = ({ hierarchy, value = {}, onChange, variant = 'grid' }) => {
-  const years = hierarchy?.years ?? []
+  const years = useMemo(() => hierarchy?.years ?? [], [hierarchy])
 
   const yearEntry = useMemo(() => getYearEntry(years, value.year), [years, value.year])
   const merchants = useMemo(() => yearEntry?.merchants ?? [], [yearEntry])
@@ -69,7 +69,7 @@ export const HierarchySelector = ({ hierarchy, value = {}, onChange, variant = '
       </select>
     </div>,
     <div key="merchant" className="field">
-      <label htmlFor="filter-merchant">Merchant</label>
+      <label htmlFor="filter-merchant">Customer</label>
       <select
         id="filter-merchant"
         value={value.merchant ?? ''}
@@ -78,7 +78,7 @@ export const HierarchySelector = ({ hierarchy, value = {}, onChange, variant = '
       >
         <option value="">{yearEntry ? 'Any' : 'Select year first'}</option>
         {merchants.map((entry) => (
-          <option key={entry.name} value={entry.name}>
+          <option key={entry.name} value={entry.name} dir="auto">
             {entry.name}
           </option>
         ))}

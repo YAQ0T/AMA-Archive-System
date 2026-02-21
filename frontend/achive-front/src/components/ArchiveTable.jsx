@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
+import { INVOICE_TYPE_LABELS } from '../constants/archive'
 import { api } from '../services/api'
+import { resolveDocumentAmount } from '../utils/amount'
 
 const formatDate = (value) => {
   if (!value) {
@@ -12,7 +14,7 @@ const formatDate = (value) => {
   return date.toLocaleString()
 }
 
-export const ArchiveTable = ({ archives, loading, onEdit }) => {
+export const ArchiveTable = ({ archives, loading, onEdit, onDelete, deletingId }) => {
   const emptyState = useMemo(() => {
     if (loading) {
       return 'Loading documents…'
@@ -52,43 +54,28 @@ export const ArchiveTable = ({ archives, loading, onEdit }) => {
           <tr>
             <th>Name</th>
             <th>Year</th>
-            <th>Merchant</th>
+            <th>Customer</th>
             <th>Month</th>
-            <th>Tags</th>
+            <th>Invoice type</th>
+            <th>Amount</th>
             <th>Notes</th>
-            <th>Total price</th>
             <th>Uploaded</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {archives.map((document) => {
-            const aggregatedPrice = document.tags?.reduce((sum, tag) => sum + Number(tag.price || 0), 0)
+            const amount = resolveDocumentAmount(document)
+            const invoiceType = INVOICE_TYPE_LABELS[document.invoiceType] || document.invoiceType || '—'
 
             return (
               <tr key={document._id}>
                 <td data-label="Name">{document.storedName || document.originalName || 'Untitled document'}</td>
                 <td data-label="Year">{document.year || '—'}</td>
-                <td data-label="Merchant">{document.merchantName || '—'}</td>
+                <td data-label="Customer" dir="auto">{document.merchantName || '—'}</td>
                 <td data-label="Month">{document.month || '—'}</td>
-                <td data-label="Tags">
-                  <div className="tag-list compact">
-                    {document.tags?.map((tag) => {
-                      const price = Number(tag.price)
-                      const hasValidPrice = Number.isFinite(price) && price >= 0
-
-                      return (
-                        <span key={`${document._id}-${tag.name}-${tag.price}`} className="tag">
-                          <span className="tag-name">{tag.name}</span>
-                          {hasValidPrice && (
-                            <span className="tag-price">{`$${price.toFixed(2)}`}</span>
-                          )}
-                        </span>
-                      )
-                    })}
-                    {!document.tags?.length && <span className="empty">No tags</span>}
-                  </div>
-                </td>
+                <td data-label="Invoice type">{invoiceType}</td>
+                <td data-label="Amount">${amount.toFixed(2)}</td>
                 <td data-label="Notes" className="notes-cell">
                   {document.notes?.trim() ? (
                     <p className="document-notes">{document.notes}</p>
@@ -96,12 +83,21 @@ export const ArchiveTable = ({ archives, loading, onEdit }) => {
                     <span className="empty">No notes</span>
                   )}
                 </td>
-                <td data-label="Total price">${aggregatedPrice?.toFixed(2) || '0.00'}</td>
                 <td data-label="Uploaded">{formatDate(document.createdAt)}</td>
                 <td data-label="Actions" className="actions table-actions">
                   {typeof onEdit === 'function' && (
                     <button type="button" className="link" onClick={() => onEdit(document)}>
                       Edit
+                    </button>
+                  )}
+                  {typeof onDelete === 'function' && (
+                    <button
+                      type="button"
+                      className="link danger-link"
+                      onClick={() => onDelete(document)}
+                      disabled={deletingId === document._id}
+                    >
+                      {deletingId === document._id ? 'Deleting…' : 'Delete'}
                     </button>
                   )}
                   <button type="button" className="link" onClick={() => handlePreview(document)}>

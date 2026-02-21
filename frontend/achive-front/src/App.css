@@ -251,6 +251,15 @@ legend {
   color: #312e81;
 }
 
+.table-actions .danger-link {
+  color: #b91c1c;
+}
+
+.table-actions .danger-link:hover,
+.table-actions .danger-link:focus-visible {
+  color: #991b1b;
+}
+
 .primary,
 .secondary,
 .ghost,
@@ -307,6 +316,12 @@ legend {
 .link:hover,
 .link:focus-visible {
   text-decoration: underline;
+}
+
+.link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .summary {
@@ -415,16 +430,24 @@ legend {
   align-items: center;
   gap: 1rem;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .pagination button {
   padding: 0.5rem 0.9rem;
   border-radius: 0.65rem;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #1f2937;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.pagination button:hover:not(:disabled),
+.pagination button:focus-visible:not(:disabled) {
+  background: #eef2ff;
+  border-color: #6366f1;
+  outline: none;
 }
 
 .pagination button:disabled {
@@ -442,7 +465,23 @@ legend {
 .pagination span small {
   font-weight: 400;
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.65);
+  color: #6b7280;
+}
+
+.page-size-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.page-size-control select {
+  min-width: 86px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.6rem;
+  background: #fff;
 }
 
 .table-wrapper {
@@ -502,6 +541,14 @@ legend {
   align-items: center;
 }
 
+.search-extra-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+  margin-top: 0.85rem;
+}
+
 .search-bar input {
   flex: 1;
   padding: 0.75rem 1rem;
@@ -542,6 +589,10 @@ legend {
   font-size: 1.75rem;
   font-weight: 700;
   color: #1f2937;
+}
+
+.metric-value-small {
+  font-size: 1.25rem;
 }
 
 .metric-breakdown {
@@ -671,6 +722,10 @@ legend {
   .search-bar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .search-extra-filters {
+    grid-template-columns: 1fr;
   }
 
   .search-bar input {

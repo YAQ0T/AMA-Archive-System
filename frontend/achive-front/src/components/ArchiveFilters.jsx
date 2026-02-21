@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { INVOICE_TYPE_LABELS, INVOICE_TYPES } from '../constants/archive'
+import { normaliseAmountInput } from '../utils/amount'
 import { HierarchySelector } from './HierarchySelector'
 
 export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy }) => {
   const [localFilters, setLocalFilters] = useState(filters)
-  const [tagInput, setTagInput] = useState('')
 
   useEffect(() => {
     setLocalFilters(filters)
@@ -14,20 +15,20 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy 
     if (filters.name) {
       parts.push(`Name contains "${filters.name}"`)
     }
-    if (filters.minPrice !== '' || filters.maxPrice !== '') {
-      parts.push(`Price between ${filters.minPrice || 'any'} and ${filters.maxPrice || 'any'}`)
+    if (filters.amount !== '') {
+      parts.push(`Amount: ${filters.amount}`)
+    }
+    if (filters.invoiceType) {
+      parts.push(`Invoice type: ${INVOICE_TYPE_LABELS[filters.invoiceType] || filters.invoiceType}`)
     }
     if (filters.year) {
       parts.push(`Year: ${filters.year}`)
     }
     if (filters.merchant) {
-      parts.push(`Merchant: ${filters.merchant}`)
+      parts.push(`Customer: ${filters.merchant}`)
     }
     if (filters.month) {
       parts.push(`Month: ${filters.month}`)
-    }
-    if (filters.tags?.length) {
-      parts.push(`Tags: ${filters.tags.join(', ')}`)
     }
     return parts.join(' • ')
   }, [filters])
@@ -55,38 +56,14 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy 
   const clearFilters = () => {
     const cleared = {
       name: '',
-      minPrice: '',
-      maxPrice: '',
-      tags: [],
+      amount: '',
+      invoiceType: '',
       year: '',
       merchant: '',
       month: '',
     }
     setLocalFilters(cleared)
-    setTagInput('')
     onFiltersChange?.(cleared)
-  }
-
-  const addTag = () => {
-    const trimmed = tagInput.trim()
-    if (!trimmed) {
-      return
-    }
-    if (localFilters.tags.includes(trimmed)) {
-      setTagInput('')
-      return
-    }
-    const nextTags = [...(localFilters.tags || []), trimmed]
-    const next = { ...localFilters, tags: nextTags }
-    setLocalFilters(next)
-    setTagInput('')
-  }
-
-  const removeTag = (tag) => {
-    const nextTags = (localFilters.tags || []).filter((value) => value !== tag)
-    const next = { ...localFilters, tags: nextTags }
-    setLocalFilters(next)
-    onFiltersChange?.(next)
   }
 
   return (
@@ -102,66 +79,43 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy 
             placeholder="Search by document name"
           />
         </div>
+
         <div className="field">
-          <label htmlFor="filter-min-price">Min price</label>
+          <label htmlFor="filter-amount">المبلغ (Amount)</label>
           <input
-            id="filter-min-price"
-            type="number"
-            min="0"
-            step="0.01"
-            value={localFilters.minPrice}
-            onChange={(event) => handleChange('minPrice', event.target.value)}
+            id="filter-amount"
+            type="text"
+            inputMode="decimal"
+            value={localFilters.amount}
+            onChange={(event) => handleChange('amount', normaliseAmountInput(event.target.value))}
+            placeholder="Exact amount"
+            dir="ltr"
           />
         </div>
+
         <div className="field">
-          <label htmlFor="filter-max-price">Max price</label>
-          <input
-            id="filter-max-price"
-            type="number"
-            min="0"
-            step="0.01"
-            value={localFilters.maxPrice}
-            onChange={(event) => handleChange('maxPrice', event.target.value)}
-          />
+          <label htmlFor="filter-invoice-type">نوع الفاتورة</label>
+          <select
+            id="filter-invoice-type"
+            value={localFilters.invoiceType}
+            onChange={(event) => handleChange('invoiceType', event.target.value)}
+          >
+            <option value="">Any</option>
+            {INVOICE_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
         </div>
+
         <HierarchySelector
           hierarchy={hierarchy}
           value={{ year: localFilters.year, merchant: localFilters.merchant, month: localFilters.month }}
           onChange={handleHierarchyChange}
           variant="grid"
         />
-        <div className="field">
-          <label htmlFor="filter-tags">Tags</label>
-          <div className="tag-input">
-            <input
-              id="filter-tags"
-              type="text"
-              value={tagInput}
-              onChange={(event) => setTagInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  addTag()
-                }
-              }}
-              placeholder="Press Enter to add a tag"
-            />
-            <button type="button" className="secondary" onClick={addTag}>
-              Add
-            </button>
-          </div>
-          <div className="tag-list">
-            {localFilters.tags?.map((tag) => (
-              <span key={tag} className="tag">
-                {tag}
-                <button type="button" aria-label={`Remove ${tag}`} onClick={() => removeTag(tag)}>
-                  ×
-                </button>
-              </span>
-            ))}
-            {!localFilters.tags?.length && <span className="empty">No tags selected</span>}
-          </div>
-        </div>
+
         <div className="actions filter-actions">
           <button type="submit" className="primary">
             Apply filters
@@ -178,4 +132,3 @@ export const ArchiveFilters = ({ filters, onFiltersChange, onRefresh, hierarchy 
     </section>
   )
 }
-

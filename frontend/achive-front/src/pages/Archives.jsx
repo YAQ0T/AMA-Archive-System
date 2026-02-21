@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { ArchiveFilters } from '../components/ArchiveFilters'
 import { ArchiveTable } from '../components/ArchiveTable'
 import { useArchiveContext } from '../context/ArchiveContext'
@@ -11,13 +11,17 @@ export const Archives = () => {
     loading,
     error,
     changePage,
+    changePageSize,
     pagination,
     hasMore,
     refresh,
     hierarchy,
     totalCount,
+    deleteDocument,
+    pageSizeOptions,
   } =
     useArchiveContext()
+  const [deletingId, setDeletingId] = useState('')
 
   const pageSummary = useMemo(() => {
     const from = (pagination.page - 1) * pagination.pageSize + 1
@@ -26,6 +30,33 @@ export const Archives = () => {
     const totalLabel = typeof totalCount === 'number' ? ` of ${totalCount}` : ''
     return `Showing ${range}${totalLabel} documents`
   }, [archives.length, pagination.page, pagination.pageSize, totalCount])
+  const totalPages = useMemo(() => {
+    if (typeof totalCount !== 'number') {
+      return null
+    }
+    return Math.max(1, Math.ceil(totalCount / pagination.pageSize))
+  }, [pagination.pageSize, totalCount])
+
+  const removeArchive = async (document) => {
+    if (!document?._id) {
+      return
+    }
+
+    const displayName = document.storedName || document.originalName || 'this document'
+    const approved = window.confirm(`Delete "${displayName}" permanently?`)
+    if (!approved) {
+      return
+    }
+
+    setDeletingId(document._id)
+    try {
+      await deleteDocument(document._id)
+    } catch (removeError) {
+      alert(removeError?.message || 'Unable to delete this document right now.')
+    } finally {
+      setDeletingId('')
+    }
+  }
 
   return (
     <section className="stack">
@@ -38,14 +69,32 @@ export const Archives = () => {
           </p>
         </div>
         <div className="pagination">
+          <div className="page-size-control">
+            <label htmlFor="archives-page-size">Per page</label>
+            <select
+              id="archives-page-size"
+              value={pagination.pageSize}
+              onChange={(event) => changePageSize(Number(event.target.value))}
+            >
+              {pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
           <button type="button" onClick={() => changePage(pagination.page - 1)} disabled={pagination.page === 1}>
             Previous
           </button>
           <span>
-            Page {pagination.page}
+            Page {pagination.page}{totalPages ? ` of ${totalPages}` : ''}
             <small>{pageSummary}</small>
           </span>
-          <button type="button" onClick={() => changePage(pagination.page + 1)} disabled={!hasMore}>
+          <button
+            type="button"
+            onClick={() => changePage(pagination.page + 1)}
+            disabled={totalPages ? pagination.page >= totalPages : !hasMore}
+          >
             Next
           </button>
         </div>
@@ -64,7 +113,12 @@ export const Archives = () => {
         </p>
       )}
 
-      <ArchiveTable archives={archives} loading={loading} />
+      <ArchiveTable
+        archives={archives}
+        loading={loading}
+        onDelete={removeArchive}
+        deletingId={deletingId}
+      />
     </section>
   )
 }

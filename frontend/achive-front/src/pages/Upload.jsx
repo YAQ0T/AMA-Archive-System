@@ -1,24 +1,18 @@
 import { useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../services/api'
 import { useArchiveContext } from '../context/ArchiveContext'
-import { MONTHS } from '../constants/archive'
-
-const QUICK_TAG_PRESETS = [
-  { label: 'Cash', name: 'Cash' },
-  { label: 'Checks', name: 'Checks' },
-]
-
-const createTag = (name = '') => ({ name, price: '' })
-const createInitialTags = () => []
+import { INVOICE_TYPES, MONTHS } from '../constants/archive'
+import { normaliseAmountInput, parseAmountInput } from '../utils/amount'
 
 export const Upload = () => {
   const { refresh, hierarchy } = useArchiveContext()
   const [files, setFiles] = useState([])
-  const [tags, setTags] = useState(() => createInitialTags())
   const [notes, setNotes] = useState('')
   const [year, setYear] = useState(() => String(new Date().getFullYear()))
   const [merchant, setMerchant] = useState('')
   const [month, setMonth] = useState(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
+  const [amount, setAmount] = useState('')
+  const [invoiceType, setInvoiceType] = useState('sales')
   const [progress, setProgress] = useState(null)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
   const fileInputRef = useRef(null)
@@ -37,50 +31,30 @@ export const Upload = () => {
       })
     })
 
-    return Array.from(names).sort((a, b) => a.localeCompare(b))
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'ar'))
   }, [hierarchy])
 
-  const normalizedTags = useMemo(
-    () =>
-      tags
-        .map((tag) => ({
-          name: tag.name.trim(),
-          price: tag.price,
-        }))
-        .filter((tag) => tag.name !== '' || tag.price !== ''),
-    [tags],
-  )
-
-  const hasInvalidTag = useMemo(
-    () =>
-      normalizedTags.some((tag) => {
-        if (tag.name === '' || tag.price === '') {
-          return true
-        }
-
-        const numericPrice = Number(tag.price)
-        return Number.isNaN(numericPrice) || numericPrice < 0
-      }),
-    [normalizedTags],
-  )
+  const parsedAmount = useMemo(() => parseAmountInput(amount, { defaultValue: 0 }), [amount])
+  const hasInvalidAmount = Number.isNaN(parsedAmount)
 
   const invalidMetadata = useMemo(() => {
     const trimmedMerchant = merchant.trim()
-    return !year || !trimmedMerchant || !month
-  }, [year, merchant, month])
+    return !year || !trimmedMerchant || !month || !invoiceType
+  }, [year, merchant, month, invoiceType])
 
   const isUploadDisabled = useMemo(
-    () => invalidMetadata || hasInvalidTag || files.length === 0 || status.type === 'loading',
-    [invalidMetadata, hasInvalidTag, files.length, status.type],
+    () => invalidMetadata || hasInvalidAmount || files.length === 0 || status.type === 'loading',
+    [invalidMetadata, hasInvalidAmount, files.length, status.type],
   )
 
   const resetMetadata = () => {
     setFiles([])
-    setTags(createInitialTags())
     setNotes('')
     setYear(() => String(new Date().getFullYear()))
     setMerchant('')
     setMonth(() => MONTHS[new Date().getMonth()] ?? MONTHS[0])
+    setAmount('')
+    setInvoiceType('sales')
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -121,22 +95,6 @@ export const Upload = () => {
     setStatus({ type: 'idle', message: '' })
   }
 
-  const updateTag = (index, patch) => {
-    setTags((current) => current.map((tag, tagIndex) => (tagIndex === index ? { ...tag, ...patch } : tag)))
-  }
-
-  const addTag = () => {
-    setTags((current) => [...current, createTag()])
-  }
-
-  const addQuickTag = (preset) => {
-    setTags((current) => [...current, createTag(preset.name)])
-  }
-
-  const removeTag = (index) => {
-    setTags((current) => current.filter((_, tagIndex) => tagIndex !== index))
-  }
-
   const submitUpload = async () => {
     if (isUploadDisabled) {
       setStatus({
@@ -148,8 +106,15 @@ export const Upload = () => {
 
     const trimmedMerchant = merchant.trim()
     const numericYear = Number(year)
-    if (!Number.isFinite(numericYear) || !trimmedMerchant || !month) {
-      setStatus({ type: 'error', message: 'Please provide a valid year, merchant name, and month.' })
+    const numericAmount = parseAmountInput(amount, { defaultValue: 0 })
+
+    if (!Number.isFinite(numericYear) || !trimmedMerchant || !month || !invoiceType) {
+      setStatus({ type: 'error', message: 'Please provide a valid year, customer name, month, and invoice type.' })
+      return
+    }
+
+    if (Number.isNaN(numericAmount)) {
+      setStatus({ type: 'error', message: 'Amount must be a valid number.' })
       return
     }
 
@@ -161,10 +126,8 @@ export const Upload = () => {
         {
           files,
           notes,
-          tags: normalizedTags.map((tag) => ({
-            name: tag.name,
-            price: Number(tag.price),
-          })),
+          amount: numericAmount,
+          invoiceType,
           year: numericYear,
           merchant: trimmedMerchant,
           month,
@@ -199,7 +162,7 @@ export const Upload = () => {
     <section className="card">
       <h2>Upload Document</h2>
       <p className="section-description">
-        Upload new documents, assign pricing, and add searchable tags. Progress updates will appear as your file uploads.
+        Upload documents with customer name, invoice type, and amount. Amount defaults to 0 when left empty.
       </p>
 
       <form className="upload-form" onSubmit={handleSubmit}>
@@ -213,9 +176,7 @@ export const Upload = () => {
             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png"
             onChange={handleFileChange}
           />
-          {files.length > 0 && (
-            <p className="hint">Selected: {files.map((file) => file.name).join(', ')}</p>
-          )}
+          {files.length > 0 && <p className="hint">Selected: {files.map((file) => file.name).join(', ')}</p>}
         </div>
 
         <div className="field">
@@ -242,15 +203,17 @@ export const Upload = () => {
               required
             />
           </div>
+
           <div className="field">
-            <label htmlFor="document-merchant">Merchant</label>
+            <label htmlFor="document-merchant">اسم الزبون</label>
             <input
               id="document-merchant"
               type="text"
               value={merchant}
               onChange={(event) => setMerchant(event.target.value)}
               list={merchantOptions.length > 0 ? 'document-merchant-options' : undefined}
-              placeholder="e.g. ACME Trading Co."
+              placeholder="مثال: مؤسسة الأمل"
+              dir="auto"
               required
             />
             {merchantOptions.length > 0 && (
@@ -261,6 +224,7 @@ export const Upload = () => {
               </datalist>
             )}
           </div>
+
           <div className="field">
             <label htmlFor="document-month">Month</label>
             <select
@@ -276,63 +240,38 @@ export const Upload = () => {
               ))}
             </select>
           </div>
-        </div>
 
-        <fieldset className="tags-fieldset">
-          <legend>Metadata tags (optional)</legend>
-          <p className="hint">Add pricing or keyword tags if you need them. You can leave this empty.</p>
-          <div className="tags-quick-actions" aria-label="Quick tag options">
-            {QUICK_TAG_PRESETS.map((preset) => (
-              <button
-                key={preset.name}
-                type="button"
-                className="ghost"
-                onClick={() => addQuickTag(preset)}
-              >
-                {preset.label}
-              </button>
-            ))}
-            <button type="button" className="ghost quick-add" onClick={addTag} aria-label="Add custom tag">
-              +
-            </button>
+          <div className="field">
+            <label htmlFor="document-invoice-type">نوع الفاتورة</label>
+            <select
+              id="document-invoice-type"
+              value={invoiceType}
+              onChange={(event) => setInvoiceType(event.target.value)}
+              required
+            >
+              {INVOICE_TYPES.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
           </div>
-          {tags.length === 0 && (
-            <p className="hint">No metadata tags added.</p>
-          )}
-          {tags.map((tag, index) => (
-            <div key={index} className="tag-row">
-              <div className="field">
-                <label htmlFor={`tag-name-${index}`}>Name</label>
-                <input
-                  id={`tag-name-${index}`}
-                  type="text"
-                  value={tag.name}
-                  onChange={(event) => updateTag(index, { name: event.target.value })}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor={`tag-price-${index}`}>Price</label>
-                <input
-                  id={`tag-price-${index}`}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={tag.price}
-                  onChange={(event) => updateTag(index, { price: event.target.value })}
-                />
-                {tag.price !== '' && Number(tag.price) === 0 && (
-                  <p className="hint warning" role="alert">Price is currently set to 0.</p>
-                )}
-              </div>
-              <button type="button" className="ghost" onClick={() => removeTag(index)}>
-                Remove
-              </button>
-            </div>
-          ))}
-          <button type="button" className="secondary" onClick={addTag}>
-            Add tag
-          </button>
-        </fieldset>
+
+          <div className="field">
+            <label htmlFor="document-amount">المبلغ (Amount)</label>
+            <input
+              id="document-amount"
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(event) => setAmount(normaliseAmountInput(event.target.value))}
+              placeholder="0"
+              dir="ltr"
+            />
+            <p className="hint">Arabic digits are converted to English automatically.</p>
+            {hasInvalidAmount && <p className="hint warning">Please enter a valid amount.</p>}
+          </div>
+        </div>
 
         {progress !== null && (
           <div className="progress">
