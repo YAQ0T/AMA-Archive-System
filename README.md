@@ -140,6 +140,28 @@ What `Start_AMA.command` does:
 - Ensures frontend production build exists
 - Starts MongoDB automatically only when `MONGO_URI` is local (`localhost` / `127.0.0.1`)
   using `~/data/db` by default (or `AMA_MONGO_DBPATH` if provided)
-- Starts the backend and opens `http://127.0.0.1:4000`
+- Starts the backend and opens `http://localhost:4000`
+
+Runtime logs and PID files are stored under `.runtime/`.
+
+## One-click launch (Windows)
+
+First-time requirements on Windows:
+- Install Node.js LTS from https://nodejs.org/ (includes npm)
+- If you use local database (`MONGO_URI` points to `localhost`/`127.0.0.1`), install MongoDB Community Server from:
+  https://www.mongodb.com/try/download/community
+
+Launcher files in the project root:
+
+1. Double-click `Setup_AMA_Windows.bat` once (first-time setup).
+2. Daily use: double-click `Start_AMA_Windows.bat`.
+3. When done: double-click `Stop_AMA_Windows.bat`.
+
+What `Start_AMA_Windows.bat` does:
+- Ensures backend `.env` exists (with local defaults if missing)
+- Ensures frontend production build exists
+- Starts MongoDB automatically only when `MONGO_URI` is local (`localhost` / `127.0.0.1`)
+  using `%USERPROFILE%\data\db` by default (or `AMA_MONGO_DBPATH` if provided)
+- Starts backend in production mode and opens `http://localhost:4000`
 
 Runtime logs and PID files are stored under `.runtime/`.
