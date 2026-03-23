@@ -17,6 +17,7 @@ export const INVOICE_TYPES = [
   { value: 'sales', label: 'مبيعات' },
   { value: 'purchases', label: 'مشتريات' },
   { value: 'tax_invoice', label: 'فاتورة ضريبية' },
+  { value: 'checks', label: 'شيكات' },
 ];
 
 export const INVOICE_TYPE_LABELS = INVOICE_TYPES.reduce((accumulator, type) => {

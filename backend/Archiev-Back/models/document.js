@@ -15,7 +15,7 @@ const MONTHS = [
   'December',
 ];
 
-const INVOICE_TYPES = ['sales', 'purchases', 'tax_invoice'];
+const INVOICE_TYPES = ['sales', 'purchases', 'tax_invoice', 'checks'];
 
 const TagSchema = new mongoose.Schema(
   {

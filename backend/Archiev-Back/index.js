@@ -172,6 +172,12 @@ const INVOICE_TYPE_ALIASES = new Map([
   ['taxinvoice', 'tax_invoice'],
   ['فاتورة ضريبية', 'tax_invoice'],
   ['فاتوره ضريبيه', 'tax_invoice'],
+  ['checks', 'checks'],
+  ['check', 'checks'],
+  ['cheques', 'checks'],
+  ['cheque', 'checks'],
+  ['شيكات', 'checks'],
+  ['شيك', 'checks'],
 ]);
 
 const normaliseDigits = (value) =>
@@ -247,7 +253,7 @@ const normaliseInvoiceType = (value) => {
 const parseInvoiceTypeField = (value, { req }) => {
   const parsed = normaliseInvoiceType(value);
   if (parsed === null) {
-    throw new Error('Invoice type must be sales, purchases, or tax invoice.');
+    throw new Error('Invoice type must be sales, purchases, tax invoice, or checks.');
   }
   req.parsedInvoiceType = parsed;
   return true;
@@ -256,7 +262,7 @@ const parseInvoiceTypeField = (value, { req }) => {
 const parseInvoiceTypeQueryField = (value, { req }) => {
   const parsed = normaliseInvoiceType(value);
   if (parsed === null) {
-    throw new Error('Invoice type filter must be sales, purchases, or tax invoice.');
+    throw new Error('Invoice type filter must be sales, purchases, tax invoice, or checks.');
   }
   req.parsedInvoiceTypeQuery = parsed;
   return true;
